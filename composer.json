@@ -1,0 +1,44 @@
+{
+    "name": "mythdigital/bundles",
+    "description": "Craft Commerce Bundles Plugin",
+    "type": "craft-plugin",
+    "version": "1.0.0",
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "craft-plugin",
+        "bundles"
+    ],
+    "support": {
+        "docs": "https://github.com/commerce-product-bundles/bundles/blob/master/README.md",
+        "issues": "https://github.com/commerce-product-bundles/bundles/issues"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Myth Digital",
+            "homepage": "https://myth.digital/"
+        }
+    ],
+    "require": {
+        "craftcms/cms": "^3.3.3",
+        "craftcms/commerce": "^2.1.13"
+    },
+    "autoload": {
+        "psr-4": {
+          "mythdigital\\bundles\\": "src/"
+        }
+    },
+    "extra": {
+        "name": "Bundles",
+        "handle": "bundles",
+        "hasCpSettings": true,
+        "hasCpSection": true,
+        "changelogUrl": "https://raw.githubusercontent.com/commerce-product-bundles/bundles/master/CHANGELOG.md",
+        "components": {
+            "bundleService": "mythdigital\\bundles\\services\\BundleService"
+        },
+        "class": "mythdigital\\bundles\\Bundles"
+    }
+}
