@@ -20,6 +20,7 @@ use mythdigital\bundles\records\BundleCategory as BundleCategoryRecord;
 use craft\commerce\base\PurchasableInterface;
 use craft\commerce\db\Table;
 use craft\commerce\elements\Order;
+use craft\commerce\models\LineItem;
 use Craft;
 use craft\base\Component;
 use craft\db\Query;
@@ -399,6 +400,75 @@ class BundleService extends Component
 
         return true;
     }    
+
+    /**
+     * Matches the specified bundle to the specified order and line items in a greedy mannr.
+     *
+     * @param Order $order The order.
+     * @param LineItem[] $lineItems The line items.
+     * @param Bundle $bundle The bundle to match.
+     * @return void
+     */
+    public function matchOrder(Order $order, $lineItems, Bundle $bundle)
+    {
+        // Check the bundle is enabled.
+        if (!$bundle->enabled) return 0;
+
+        // Check the dates align.
+        $currentDate = new \DateTime();
+
+        if (!empty($bundle->dateFrom) && $bundle->dateFrom > $currentDate) return 0;
+        if (!empty($bundle->dateTo) && $bundle->dateTo < $currentDate) return 0;
+
+        // For the bundle to match, we need to find line items that match the category and variant constraints.
+        $matchingLineItems = [];
+
+        foreach ($lineItems as $lineItem)
+        {
+            $purchasedItem = $lineItem->getPurchasable();
+            $purchasedProduct = null;
+
+            if (\is_a($purchasedItem, 'craft\commerce\elements\Variant')) {
+                $purchasedProduct = $purchasedItem->getProduct();
+            }
+
+            $purchaseableMatch = empty($bundle->getPurchasableIds()) || \in_array($purchasedItem->getId(), $bundle->getPurchasableIds());
+
+            $categoryMatch = empty($bundle->getCategoryIds());
+
+            if (!$categoryMatch) {
+                foreach ($bundle->getCategoryIds() as $categoryId) {
+                    $categoryByVariant = Category::find()->id($categoryId)->relatedTo($purchasedItem)->count() > 0;
+                    $categoryByProduct = false;
+
+                    if (!empty($purchasedProduct)) {
+                        $categoryByProduct = Category::find()->id($categoryId)->relatedTo($purchasedProduct)->count() > 0;
+                    }
+
+                    $categoryMatch = $categoryByVariant || $categoryByProduct;
+
+                    if ($categoryMatch) break;
+                }
+            }
+
+            if ($purchaseableMatch && $categoryMatch) $matchingLineItems[] = $lineItem;
+        }
+
+        $matchCount = 0;
+        $matchingLineItemRemainingCount = 0;
+        $purchaseQty = $bundle->purchaseQty;
+
+        foreach ($matchingLineItems as $lineItem) {
+            $matchingLineItemRemainingCount += $lineItem->qty;
+        }
+
+        while ($matchingLineItemRemainingCount >= $purchaseQty) {
+            $matchCount++;
+            $matchingLineItemRemainingCount = $matchingLineItemRemainingCount - $purchaseQty;
+        }
+
+        return $matchCount;
+    }
 
     // Private Methods
     // =========================================================================

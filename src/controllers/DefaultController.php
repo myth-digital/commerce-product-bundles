@@ -19,6 +19,7 @@ use craft\commerce\base\Purchasable;
 use craft\commerce\base\PurchasableInterface;
 use craft\commerce\elements\Product;
 use mythdigital\bundles\models\Bundle;
+use mythdigital\bundles\services\BundleService;
 use craft\elements\Category;
 use craft\helpers\ArrayHelper;
 use craft\helpers\DateTimeHelper;

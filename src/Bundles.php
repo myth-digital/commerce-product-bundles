@@ -10,6 +10,7 @@
 
 namespace mythdigital\bundles;
 
+use mythdigital\bundles\adjusters\Bundle as BundleAdjuster;
 use mythdigital\bundles\services\BundleService as BundleService;
 use mythdigital\bundles\models\Settings;
 
@@ -19,6 +20,8 @@ use craft\services\Plugins;
 use craft\events\PluginEvent;
 use craft\web\UrlManager;
 use craft\events\RegisterUrlRulesEvent;
+use craft\events\RegisterComponentTypesEvent;
+use craft\commerce\services\OrderAdjustments;
 
 use yii\base\Event;
 
@@ -75,6 +78,12 @@ class Bundles extends Plugin
         );
 
         Event::on(
+            OrderAdjustments::class, 
+            OrderAdjustments::EVENT_REGISTER_ORDER_ADJUSTERS, 
+            [$this, 'onRegisterOrderAdjusters']
+        );        
+
+        Event::on(
             Plugins::class,
             Plugins::EVENT_AFTER_INSTALL_PLUGIN,
             function (PluginEvent $event) {
@@ -91,6 +100,15 @@ class Bundles extends Plugin
             ),
             __METHOD__
         );
+    }
+
+    /**
+     * Registers an event handler that executes to register Order Adjusters with Commerce.
+     */
+    public function onRegisterOrderAdjusters(RegisterComponentTypesEvent $e) 
+    {
+        // Insert at the start.
+        array_unshift($e->types, BundleAdjuster::class);
     }
 
     /**
