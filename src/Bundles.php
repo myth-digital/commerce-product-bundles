@@ -10,7 +10,7 @@
 
 namespace mythdigital\bundles;
 
-use mythdigital\bundles\services\BundleService as BundleServiceService;
+use mythdigital\bundles\services\BundleService as BundleService;
 use mythdigital\bundles\models\Settings;
 
 use Craft;
@@ -60,19 +60,17 @@ class Bundles extends Plugin
         parent::init();
         self::$plugin = $this;
 
-        Event::on(
-            UrlManager::class,
-            UrlManager::EVENT_REGISTER_SITE_URL_RULES,
-            function (RegisterUrlRulesEvent $event) {
-                $event->rules['siteActionTrigger1'] = 'bundles/default';
-            }
-        );
+        $this->setComponents([
+            'bundles' => BundleService::class
+        ]);
 
         Event::on(
             UrlManager::class,
             UrlManager::EVENT_REGISTER_CP_URL_RULES,
             function (RegisterUrlRulesEvent $event) {
-                $event->rules['cpActionTrigger1'] = 'bundles/default/do-something';
+                $event->rules['bundles/'] = 'bundles/default/index';
+                $event->rules['bundles/new'] = 'bundles/default/edit';
+                $event->rules['bundles/<id:\d+>'] = 'bundles/default/edit';
             }
         );
 
@@ -93,6 +91,16 @@ class Bundles extends Plugin
             ),
             __METHOD__
         );
+    }
+
+    /**
+     * Returns the Bundles service
+     *
+     * @return BundleService The variants service
+     */
+    public function getBundles(): BundleService
+    {
+        return $this->get('bundles');
     }
 
     // Protected Methods

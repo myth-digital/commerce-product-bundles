@@ -9,6 +9,7 @@ namespace mythdigital\bundles\records;
 
 use craft\db\ActiveRecord;
 use yii\db\ActiveQueryInterface;
+use craft\commerce\records\Purchasable;
 
 /**
  * Bundle product record.
@@ -19,8 +20,8 @@ use yii\db\ActiveQueryInterface;
  * @property ActiveQueryInterface $purchasable
  * @property int $purchasableId
  * @property int $purchasableType
- * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 2.0
+ * @author Myth Digital
+ * @since 1.0
  */
 class BundlePurchasable extends ActiveRecord
 {

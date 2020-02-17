@@ -72,18 +72,49 @@ class Install extends Migration
     {
         $tablesCreated = false;
 
+        $tableSchema = Craft::$app->db->schema->getTableSchema('{{%bundle_bundle_purchasables}}');
+        if ($tableSchema == null) {
+            $this->createTable('{{%bundle_bundle_purchasables}}', [
+                'id' => $this->primaryKey(),
+                'bundleId' => $this->integer()->notNull(),
+                'purchasableId' => $this->integer()->notNull(),
+                'purchasableType' => $this->string()->notNull(),
+                'dateCreated' => $this->dateTime()->notNull(),
+                'dateUpdated' => $this->dateTime()->notNull(),
+                'uid' => $this->uid(),
+            ]);
+        }
+
+        $tableSchema = Craft::$app->db->schema->getTableSchema('{{%bundles_bundle_categories}}');
+        if ($tableSchema == null) {
+
+            $this->createTable('{{%bundles_bundle_categories}}', [
+                'id' => $this->primaryKey(),
+                'bundleId' => $this->integer()->notNull(),
+                'categoryId' => $this->integer()->notNull(),
+                'dateCreated' => $this->dateTime()->notNull(),
+                'dateUpdated' => $this->dateTime()->notNull(),
+                'uid' => $this->uid(),
+            ]);
+        }
+
         $tableSchema = Craft::$app->db->schema->getTableSchema('{{%bundles_bundle}}');
         if ($tableSchema === null) {
             $tablesCreated = true;
-            $this->createTable(
-                '{{%bundles_bundle}}',
-                [
+            $this->createTable('{{%bundles_bundle}}', [
                     'id' => $this->primaryKey(),
+                    'name' => $this->mediumText()->notNull(),
+                    'description' => $this->longText(),
+                    'dateFrom' => $this->dateTime(),
+                    'dateTo' => $this->dateTime(),     
+                    'enabled' => $this->boolean()->notNull(),
+                    'bundleDiscount' => $this->float()->notNull(),
+                    'purchaseQty' => $this->integer()->notNull(),
+                    'sortOrder' => $this->integer()->notNull(),
+                    'totalUses' => $this->integer()->notNull(),
                     'dateCreated' => $this->dateTime()->notNull(),
                     'dateUpdated' => $this->dateTime()->notNull(),
-                    'uid' => $this->uid(),
-                    'siteId' => $this->integer()->notNull(),
-                    'some_field' => $this->string(255)->notNull()->defaultValue(''),
+                    'uid' => $this->uid()
                 ]
             );
         }
@@ -96,23 +127,10 @@ class Install extends Migration
      */
     protected function createIndexes()
     {
-        $this->createIndex(
-            $this->db->getIndexName(
-                '{{%bundles_bundle}}',
-                'some_field',
-                true
-            ),
-            '{{%bundles_bundle}}',
-            'some_field',
-            true
-        );
-        // Additional commands depending on the db driver
-        switch ($this->driver) {
-            case DbConfig::DRIVER_MYSQL:
-                break;
-            case DbConfig::DRIVER_PGSQL:
-                break;
-        }
+        $this->createIndex(null, '{{%bundle_bundle_purchasables}}', ['bundleId', 'purchasableId'], true);
+        $this->createIndex(null, '{{%bundle_bundle_purchasables}}', 'purchasableId', false);
+        $this->createIndex(null, '{{%bundles_bundle_categories}}', ['bundleId', 'categoryId'], true);
+        $this->createIndex(null, '{{%bundles_bundle_categories}}', 'categoryId', false);        
     }
 
     /**
@@ -120,15 +138,10 @@ class Install extends Migration
      */
     protected function addForeignKeys()
     {
-        $this->addForeignKey(
-            $this->db->getForeignKeyName('{{%bundles_bundle}}', 'siteId'),
-            '{{%bundles_bundle}}',
-            'siteId',
-            '{{%sites}}',
-            'id',
-            'CASCADE',
-            'CASCADE'
-        );
+        $this->addForeignKey(null, '{{%bundle_bundle_purchasables}}', ['bundleId'], '{{%bundles_bundle}}', ['id'], 'CASCADE', 'CASCADE');
+        $this->addForeignKey(null, '{{%bundle_bundle_purchasables}}', ['purchasableId'], '{{%commerce_purchasables}}', ['id'], 'CASCADE', 'CASCADE');
+        $this->addForeignKey(null, '{{%bundles_bundle_categories}}', ['bundleId'], '{{%bundles_bundle}}', ['id'], 'CASCADE', 'CASCADE');
+        $this->addForeignKey(null, '{{%bundles_bundle_categories}}', ['categoryId'], '{{%categories}}', ['id'], 'CASCADE', 'CASCADE');        
     }
 
     /**
@@ -143,6 +156,8 @@ class Install extends Migration
      */
     protected function removeTables()
     {
+        $this->dropTableIfExists('{{%bundle_bundle_purchasables}}');
+        $this->dropTableIfExists('{{%bundles_bundle_categories}}');
         $this->dropTableIfExists('{{%bundles_bundle}}');
     }
 }

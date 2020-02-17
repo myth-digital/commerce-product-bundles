@@ -20,7 +20,7 @@ use yii\db\ActiveQueryInterface;
  * @property int $bundleId
  * @property int $id
  * @author Myth Digital
- * @since 2.0
+ * @since 1.0
  */
 class BundleCategory extends ActiveRecord
 {

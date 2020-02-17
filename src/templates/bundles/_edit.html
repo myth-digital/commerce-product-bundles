@@ -1,0 +1,146 @@
+{% extends "bundles/_layouts/cp" %}
+
+{% set selectedSubnavItem = "bundles" %}
+
+{% set crumbs = [
+    { label: "Bundles"|t('bundles'), url: url('bundles') },
+] %}
+
+{% set fullPageForm = true %}
+
+{% import "_includes/forms" as forms %}
+{% import "bundles/_includes/forms/commerceForms" as commerceForms %}
+
+
+{% set bundleClasses = "" %}
+{% if (bundle.getErrors('name')) %}
+    {% set bundleClasses = "error" %}
+{% endif %}
+
+{% set tabs = {
+    0: {'label':'Bundle'|t('bundles'),'url':'#bundle','class':bundleClasses},
+} %}
+
+
+{% block content %}
+    <input type="hidden" name="action" value="bundles/default/save">
+    {{ redirectInput('bundles/') }}
+    {% if bundle.id %}
+        <input type="hidden" name="sortOrder" value="{{ bundle.sortOrder }}">
+        <input type="hidden" name="id" value="{{ bundle.id }}">
+    {% endif %}
+
+    <div id="bundle">
+        {{ forms.textField({
+            first: true,
+            label: "Name"|t('bundles'),
+            instructions: "What this bundle will be called in the CP."|t('bundles'),
+            id: 'name',
+            name: 'name',
+            value: bundle.name,
+            errors: bundle.getErrors('name'),
+            autofocus: true,
+            required: true,
+        }) }}
+
+        {{ forms.textField({
+            label: "Description"|t('bundles'),
+            instructions: "Bundle description."|t('bundles'),
+            id: 'description',
+            name: 'description',
+            value: bundle.description,
+            errors: bundle.getErrors('description'),
+        }) }}
+
+        {{ forms.lightSwitchField({
+            label: "Enable this bundle"|t('bundles'),
+            id: 'enabled',
+            name: 'enabled',
+            value: 1,
+            on: bundle.enabled,
+            checked: bundle.enabled,
+            errors: bundle.getErrors('enabled')
+        }) }}
+
+        {{ forms.dateTimeField({
+            label: "Start Date"|t('bundles'),
+            instructions: "Date from which the bundle will be active. Leave blank for unlimited start date"|t('bundles'),
+            id: 'dateFrom',
+            name: 'dateFrom',
+            value: bundle.dateFrom,
+            errors: bundle.getErrors('dateFrom'),
+        }) }}   
+        
+        {{ forms.dateTimeField({
+            label: "End Date"|t('bundles'),
+            instructions: "Date when the bundle will be finished. Leave blank for unlimited end date"|t('bundles'),
+            id: 'dateTo',
+            name: 'dateTo',
+            value: bundle.dateTo,
+            errors: bundle.getErrors('dateTo'),
+        }) }}    
+        
+        {{ commerceForms.numberField({
+            label: "Bundle discount"|t('bundles'),
+            instructions: "The total discount to apply when an order matches this bundle."|t('bundles'),
+            id: 'bundleDiscount',
+            name: 'bundleDiscount',
+            value: bundle.bundleDiscount != 0 ? bundle.bundleDiscount : 0,
+            type: 'number',
+            step: 'any',
+            required: true,
+            errors: bundle.getErrors('bundleDiscount'),
+        }) }}
+
+        {{ commerceForms.numberField({
+            label: "Quantity"|t('commerce'),
+            instructions: "The number of line items that must be matched each time to form this bundle."|t('bundles'),
+            id: 'purchaseQty',
+            name: 'purchaseQty',
+            value: bundle.purchaseQty != 0 ? bundle.purchaseQty : 0,
+            type: 'number',
+            step: 'any',
+            required: true,
+            errors: bundle.getErrors('purchaseQty'),
+        }) }}        
+           
+
+        {% for purchasableType in purchasableTypes %}
+            {% set instruction = "for which this sale will be applicable to. Leave all purchasable fields blank for any purchasable."|t('bundles') %}
+            {{ forms.elementSelectField({
+                id: 'purchasables-'~purchasableType.elementType|id,
+                label: purchasableType.name,
+                name: 'purchasables['~purchasableType.elementType~']',
+                elements: purchasables[purchasableType.elementType] ?? null,
+                elementType: purchasableType.elementType,
+                limit: null,
+                instructions: purchasableType.name~" "~instruction,
+                errors: bundle.getErrors('purchasables-'~purchasableType.elementType|replace('\\','-')),
+            }) }}
+        {% endfor %}
+
+        {{ forms.elementSelectField({
+            id: 'categories',
+            label: 'Categories'|t('commerce'),
+            name: 'categories',
+            elements: categories ? categories : null,
+            elementType: categoryElementType,
+            limit: null,
+            instructions: "Categories that the purchasables must be related to. Leave blank for all categories."|t('bundles'),
+            errors: bundle.getErrors('categories'),
+        }) }}        
+
+    </div>
+
+{% endblock %}
+
+
+{% js %}
+        $(function() {
+            $('#groups, #productTypes').selectize({
+                plugins: ['remove_button'],
+                dropdownParent: 'body'
+            });
+
+        });
+{% endjs %}

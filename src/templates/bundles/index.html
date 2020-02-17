@@ -1,0 +1,66 @@
+{% extends "bundles/_layouts/promotions" %}
+{% set selectedSidebarNavItem = 'bundles' %}
+
+{% block actionButton %}
+    <div class="buttons">
+        <a href="{{ url('bundles/new') }}"
+           class="btn submit add icon">{{ 'New bundle'|t('bundles') }}</a>
+    </div>
+{% endblock %}
+
+
+{% block content %}
+    <h2>{{ "Bundles"|t('commerce') }}</h2>
+
+    <div id="no-bundles"{% if bundles|length %} class="hidden"{% endif %}>
+        <p>{{ "No bundles exist yet."|t('bundles') }}</p>
+    </div>
+
+    {% if bundles|length %}
+        <table id="bundles" class="data fullwidth collapsible">
+            <thead>
+            <tr>
+                <th scope="col">{{ "Name"|t('commerce') }}</th>
+                <td class="thin"></td>
+                <td class="thin"></td>
+            </tr>
+            </thead>
+            <tbody>
+            {% for bundle in bundles %}
+                <tr data-id="{{ bundle.id }}" data-name="{{ bundle.name }}">
+                    <th scope="row" data-title="{{ 'Name'|t('bundles') }}">
+                        {% if bundle.enabled %}
+                            <div class="status enabled"></div>
+                        {% else %}
+                            <div class="status"></div>
+                        {% endif %}
+                        <a href="{{ url('bundles/'~bundle.id) }}">{{ bundle.name }}</a>
+                    </th>
+                    <td class="thin">
+                        <a class="move icon disabled"
+                           title="{{ 'Delete'|t('bundles') }}"
+                           role="button"></a>
+                    </td>
+                    <td class="thin"><a class="delete icon"
+                                        title="{{ 'Delete'|t('bundles') }}"
+                                        role="button"></a></td>
+                </tr>
+            {% endfor %}
+
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}
+
+
+{% js %}
+    var adminTable = new Craft.AdminTable({
+      tableSelector: '#bundles',
+      noObjectsSelector: '#no-bundles',
+      deleteAction: 'bundles/default/delete',
+      sortable: true,
+      reorderAction: 'bundles/default/reorder',
+      reorderSuccessMessage: Craft.t('bundles', 'Bundles reordered.') ,
+      reorderFailMessage:    Craft.t('bundles', 'Couldn’t reorder bundles.')
+    });
+{% endjs %}

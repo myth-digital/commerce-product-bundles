@@ -1,0 +1,15 @@
+{% extends "commerce/_layouts/cp" %}
+
+{% set title = "Bundles"|t('bundles') %}
+{% set selectedSubnavItem = "bundles" %}
+{% set bodyClass = (bodyClass is defined ? bodyClass~' ' : '') ~ "bundles" %}
+
+{% set sidebarNavItems = {
+    bundles: { label: 'Bundles'|t('bundles'), url: url('bundles/bundles') }
+} %}
+
+{% set docTitle = sidebarNavItems[selectedSidebarNavItem].label~' - '~title~' - '~'Bundles' %}
+
+{% block sidebar %}
+    {% include "_includes/nav" with { items: sidebarNavItems, selectedItem: selectedSidebarNavItem } only %}
+{% endblock %}
