@@ -52,19 +52,14 @@ class Bundle extends Model
     public $dateTo;    
 
     /**
-     * @var bool Discount enabled?
+     * @var bool Bundle enabled?
      */
     public $enabled = true;
 
     /**
-     * @var float Total minimum spend on matching items
+     * @var float Total price of the bundle
      */
-    public $bundleDiscount = 0;    
-
-    /**
-     * @var int Per user coupon use limit
-     */
-    public $purchaseQty = 0;
+    public $bundlePrice = 0;    
 
     /**
      * @var int Total use counter;
@@ -87,12 +82,7 @@ class Bundle extends Model
     public $dateUpdated;
 
     /**
-     * @var int[] Product Ids
-     */
-    private $_purchasableIds;
-
-    /**
-     * @var int[] Product Type IDs
+     * @var array Category IDs
      */
     private $_categoryIds;
 
@@ -132,35 +122,13 @@ class Bundle extends Model
     }
 
     /**
-     * @return array
-     */
-    public function getPurchasableIds(): array
-    {
-        if (null === $this->_purchasableIds) {
-            $this->_loadRelations();
-        }
-
-        return $this->_purchasableIds;
-    }
-
-    /**
      * Sets the related product type ids
      *
      * @param array $categoryIds
      */
     public function setCategoryIds(array $categoryIds)
     {
-        $this->_categoryIds = array_unique($categoryIds);
-    }
-
-    /**
-     * Sets the related product ids
-     *
-     * @param array $purchasableIds
-     */
-    public function setPurchasableIds(array $purchasableIds)
-    {
-        $this->_purchasableIds = array_unique($purchasableIds);
+        $this->_categoryIds = $categoryIds;
     }
 
     /**
@@ -170,11 +138,10 @@ class Bundle extends Model
     {
         $rules = parent::rules();
 
-        $rules[] = [['name', 'purchaseQty', 'bundleDiscount'], 'required'];
+        $rules[] = [['name', 'bundlePrice'], 'required'];
         $rules[] = [
             [
-                'bundleDiscount',
-                'purchaseQty',
+                'bundlePrice',
                 'totalUses'
             ], 'number', 'skipOnEmpty' => false
         ];

@@ -1,5 +1,7 @@
 {% extends "bundles/_layouts/cp" %}
 
+{% do view.registerAssetBundle("mythdigital\\bundles\\web\\assets\\bundles\\BundleAsset") %}
+
 {% set selectedSubnavItem = "bundles" %}
 
 {% set crumbs = [
@@ -11,9 +13,8 @@
 {% import "_includes/forms" as forms %}
 {% import "bundles/_includes/forms/commerceForms" as commerceForms %}
 
-
 {% set bundleClasses = "" %}
-{% if (bundle.getErrors('name')) %}
+{% if (bundle.hasErrors()) %}
     {% set bundleClasses = "error" %}
 {% endif %}
 
@@ -81,54 +82,41 @@
         }) }}    
         
         {{ commerceForms.numberField({
-            label: "Bundle discount"|t('bundles'),
-            instructions: "The total discount to apply when an order matches this bundle."|t('bundles'),
-            id: 'bundleDiscount',
-            name: 'bundleDiscount',
-            value: bundle.bundleDiscount != 0 ? bundle.bundleDiscount : 0,
+            label: "Bundle price"|t('bundles'),
+            instructions: "The total price of the bundle."|t('bundles'),
+            id: 'bundlePrice',
+            name: 'bundlePrice',
+            value: bundle.bundlePrice != 0 ? bundle.bundlePrice : 0,
             type: 'number',
             step: 'any',
             required: true,
-            errors: bundle.getErrors('bundleDiscount'),
+            errors: bundle.getErrors('bundlePrice'),
         }) }}
 
-        {{ commerceForms.numberField({
-            label: "Quantity"|t('commerce'),
-            instructions: "The number of line items that must be matched each time to form this bundle."|t('bundles'),
-            id: 'purchaseQty',
-            name: 'purchaseQty',
-            value: bundle.purchaseQty != 0 ? bundle.purchaseQty : 0,
-            type: 'number',
-            step: 'any',
-            required: true,
-            errors: bundle.getErrors('purchaseQty'),
-        }) }}        
-           
+        <table class="data fullwidth collapsible" id="categorySelectTable">
+            <thead>
+                <tr>
+                    <td>Category</td>
+                    <td>Quantity</td>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in bundle.getCategoryIds() %}
+                    {% include 'bundles/bundles/_categoryPartial.html' with {'categoey': category} %}
+                {% endfor %}
+                <tr>
+                    <td colspan="2"><a id="addCategory" href='#'>Add a category</a></td>
+                </tr>                
+            </tbody>
+        </table>
 
-        {% for purchasableType in purchasableTypes %}
-            {% set instruction = "for which this sale will be applicable to. Leave all purchasable fields blank for any purchasable."|t('bundles') %}
-            {{ forms.elementSelectField({
-                id: 'purchasables-'~purchasableType.elementType|id,
-                label: purchasableType.name,
-                name: 'purchasables['~purchasableType.elementType~']',
-                elements: purchasables[purchasableType.elementType] ?? null,
-                elementType: purchasableType.elementType,
-                limit: null,
-                instructions: purchasableType.name~" "~instruction,
-                errors: bundle.getErrors('purchasables-'~purchasableType.elementType|replace('\\','-')),
-            }) }}
-        {% endfor %}
-
-        {{ forms.elementSelectField({
-            id: 'categories',
-            label: 'Categories'|t('commerce'),
-            name: 'categories',
-            elements: categories ? categories : null,
-            elementType: categoryElementType,
-            limit: null,
-            instructions: "Categories that the purchasables must be related to. Leave blank for all categories."|t('bundles'),
-            errors: bundle.getErrors('categories'),
-        }) }}        
+        {% if bundle.getErrors('categories') is not empty %}
+            {% for err in bundle.getErrors('categories') %}
+            <p class="error">
+                {{ err }}
+            </p> 
+            {% endfor %}
+        {% endif %}        
 
     </div>
 

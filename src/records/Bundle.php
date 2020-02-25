@@ -26,8 +26,7 @@ use craft\commerce\records\Purchasable;
  * @property DateTime $dateFrom
  * @property DateTime $dateTo
  * @property bool $enabled
- * @property float $bundleDiscount
- * @property int $purchaseQty
+ * @property float $bundlePrice
  * @property int $sortOrder
  * @property int $totalUses
  * @author Myth Digital
@@ -50,25 +49,9 @@ class Bundle extends ActiveRecord
     /**
      * @return ActiveQueryInterface
      */
-    public function getBundlePurchasables(): ActiveQueryInterface
-    {
-        return $this->hasMany(BundlePurchasable::class, ['bundleId' => 'id']);
-    }
-
-    /**
-     * @return ActiveQueryInterface
-     */
     public function getBundleCategories(): ActiveQueryInterface
     {
         return $this->hasMany(BundleCategory::class, ['bundleId' => 'id']);
-    }
-
-    /**
-     * @return ActiveQueryInterface
-     */
-    public function getPurchasables(): ActiveQueryInterface
-    {
-        return $this->hasMany(Purchasable::class, ['id' => 'bundleId'])->via('bundlePurchasables');
     }
 
     /**

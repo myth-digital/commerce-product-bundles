@@ -77,6 +77,7 @@ class DefaultController extends Controller
                 }
             } else {
                 $variables['bundle'] = new Bundle();
+
             }
         }
 
@@ -84,6 +85,25 @@ class DefaultController extends Controller
 
         return $this->renderTemplate('bundles/bundles/_edit', $variables);
     }
+
+    /**
+     * @return Response
+     * @throws HttpException
+     */
+    public function actionCategoryPartial(int $index = 0): Response
+    {
+        $variables = [
+            'category' => [
+                'index' => $index,
+                'id' => -1,
+                'purchaseQty' => 0,
+                'category' => null
+            ],
+            'categoryElementType' => Category::class
+        ];
+
+        return $this->renderTemplate('bundles/bundles/_categoryPartial', $variables);
+    }    
 
     /**
      * @throws HttpException
@@ -99,8 +119,7 @@ class DefaultController extends Controller
         $bundle->name = $request->getBodyParam('name');
         $bundle->description = $request->getBodyParam('description');
         $bundle->enabled = (bool)$request->getBodyParam('enabled');
-        $bundle->bundleDiscount = $request->getBodyParam('bundleDiscount');
-        $bundle->purchaseQty = $request->getBodyParam('purchaseQty');
+        $bundle->bundlePrice = $request->getBodyParam('bundlePrice');
         $bundle->totalUses = $bundle->totalUses ? $bundle->totalUses : 0;
 
         $date = $request->getBodyParam('dateFrom');
@@ -118,25 +137,54 @@ class DefaultController extends Controller
             $discount->dateTo = $dateTime;
         }
 
-        $purchasables = [];
-        $purchasableGroups = $request->getBodyParam('purchasables') ?: [];
-        foreach ($purchasableGroups as $group) {
-            if (is_array($group)) {
-                array_push($purchasables, ...$group);
-            }
-        }
-        $purchasables = array_unique($purchasables);
-        $bundle->setPurchasableIds($purchasables);
-
         $categories = $request->getBodyParam('categories', []);
         if (!$categories) {
             $categories = [];
         }
-        $bundle->setCategoryIds($categories);
+
+        $categoryQuantities = $request->getBodyParam('categoriesPurchaseQty', []);
+        if (!$categoryQuantities) {
+            $categoryQuantities = [];
+        }
+
+        // Combine the fields together.
+        $hasCategoryError = false;
+
+        $categories = array_filter($categories, function($c) {
+            return !empty($c) && sizeof($c) == 1;
+        });
+
+        $categoryQuantities = array_filter($categoryQuantities, function($c) {
+            return !empty($c) && $c > 0;
+        });
+
+        if (sizeof($categories) !== sizeof($categoryQuantities)) {
+            $hasCategoryError = true;
+            $bundle->addError('categories', 'A category and quantity must be specified for each row');
+        }
+
+        $mergedCategories = [];
+
+        if (!$hasCategoryError) {
+            for ($i = 0; $i < sizeof($categories); $i++) {
+                $mergedCategories[] = [
+                    'index' => $i,
+                    'id' => $categories[$i][0],
+                    'purchaseQty' => $categoryQuantities[$i],
+                    'category' => Craft::$app->getElements()->getElementById($categories[$i][0])
+                ];     
+            }
+        }
+
+        if (!$hasCategoryError && empty($mergedCategories)) {
+            $hasCategoryError = true;
+            $bundle->addError('categories', 'At least one valid row must be added');
+        } else {
+            $bundle->setCategoryIds($mergedCategories);
+        }
 
         // Save it
-        if (Bundles::getInstance()->getBundles()->saveBundle($bundle)
-        ) {
+        if (!$hasCategoryError && Bundles::getInstance()->getBundles()->saveBundle($bundle)) {
             Craft::$app->getSession()->setNotice(Craft::t('commerce', 'Bundle saved.'));
             $this->redirectToPostedUrl($bundle);
         } else {
@@ -213,60 +261,5 @@ class DefaultController extends Controller
         }
 
         $variables['categoryElementType'] = Category::class;
-        $variables['categories'] = null;
-        $categories = $categoryIds = [];
-
-        if (empty($variables['id']) && Craft::$app->getRequest()->getParam('categoryIds')) {
-            $categoryIds = explode('|', Craft::$app->getRequest()->getParam('categoryIds'));
-        } else {
-            $categoryIds = $variables['bundle']->getCategoryIds();
-        }
-
-        foreach ($categoryIds as $categoryId) {
-            $id = (int)$categoryId;
-            $categories[] = Craft::$app->getElements()->getElementById($id);
-        }
-
-        $variables['categories'] = $categories;
-
-        $variables['purchasables'] = null;
-
-
-        if (empty($variables['id']) && Craft::$app->getRequest()->getParam('purchasableIds')) {
-            $purchasableIdsFromUrl = explode('|', Craft::$app->getRequest()->getParam('purchasableIds'));
-            $purchasableIds = [];
-            foreach ($purchasableIdsFromUrl as $purchasableId) {
-                $purchasable = Craft::$app->getElements()->getElementById((int)$purchasableId);
-                if ($purchasable && $purchasable instanceof Product) {
-                    $purchasableIds[] = $purchasable->defaultVariantId;
-                } else {
-                    $purchasableIds[] = $purchasableId;
-                }
-            }
-        } else {
-            $purchasableIds = $variables['bundle']->getPurchasableIds();
-        }
-
-        $purchasables = [];
-        foreach ($purchasableIds as $purchasableId) {
-            $purchasable = Craft::$app->getElements()->getElementById((int)$purchasableId);
-            if ($purchasable && $purchasable instanceof PurchasableInterface) {
-                $class = get_class($purchasable);
-                $purchasables[$class] = $purchasables[$class] ?? [];
-                $purchasables[$class][] = $purchasable;
-            }
-        }
-        $variables['purchasables'] = $purchasables;
-
-        $variables['purchasableTypes'] = [];
-        $purchasableTypes = CommercePlugin::getInstance()->getPurchasables()->getAllPurchasableElementTypes();
-
-        /** @var Purchasable $purchasableType */
-        foreach ($purchasableTypes as $purchasableType) {
-            $variables['purchasableTypes'][] = [
-                'name' => $purchasableType::displayName(),
-                'elementType' => $purchasableType
-            ];
-        }
     }
 }

@@ -14,7 +14,6 @@ use mythdigital\bundles\Bundles;
 use mythdigital\bundles\records\Bundle as BundleRecord;
 use mythdigital\bundles\models\Bundle;
 use mythdigital\bundles\events\BundleEvent;
-use mythdigital\bundles\records\BundlePurchasable as BundlePurchasableRecord;
 use mythdigital\bundles\records\BundleCategory as BundleCategoryRecord;
 
 use craft\commerce\base\PurchasableInterface;
@@ -133,14 +132,13 @@ class BundleService extends Component
         if (null === $this->_allBundles) {
             $bundles = $this->_createBundleQuery()
                 ->addSelect([
-                    'bp.purchasableId',
                     'bpt.categoryId',
+                    'bpt.purchaseQty as bptPurchaseQty'
                 ])
-                ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
                 ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
                 ->all();
 
-            $this->_allBundles = $this->_populatBundleRelations($bundles);
+            $this->_allBundles = $this->_populateBundleRelations($bundles);
         }
 
         return $this->_allBundles;
@@ -161,12 +159,11 @@ class BundleService extends Component
 
             $discounts = $this->_createBundleQuery()
                 ->addSelect([
-                    'bp.purchasableId',
                     'bpt.categoryId',
+                    'bpt.purchaseQty as bptPurchaseQty'
                 ])
-                ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
                 ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
-                // Restricted by enabled discounts
+                // Restricted by enabled bundles
                 ->where([
                     'enabled' => 1,
                 ])
@@ -183,7 +180,7 @@ class BundleService extends Component
                 ])
                 ->all();
 
-            $this->_allActiveBundles = $this->_populatBundleRelations($discounts);
+            $this->_allActiveBundles = $this->_populateBundleRelations($discounts);
         }
 
         return $this->_allActiveBundles;
@@ -197,58 +194,31 @@ class BundleService extends Component
     public function populateBundleRelations(Bundle $bundle)
     {
         $rows = (new Query())->select(
-            'bp.purchasableId,
-            bpt.categoryId')
+            'bpt.categoryId,
+            bpt.purchaseQty as bptPurchaseQty')
             ->from('{{%bundles_bundle}}' . ' bundles')
-            ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
             ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
             ->where(['bundles.id' => $bundle->id])
             ->all();
 
-        $purchasableIds = [];
         $categoryIds = [];
 
         foreach ($rows as $row) {
-            if ($row['purchasableId']) {
-                $purchasableIds[] = $row['purchasableId'];
-            }
 
             if ($row['categoryId']) {
-                $categoryIds[] = $row['categoryId'];
+                $categoryIds[] = [
+                    'id' => $row['categoryId'],
+                    'purchaseQty' => $row['bptPurchaseQty'],
+                    'category' => Craft::$app->getElements()->getElementById($row['categoryId'])
+                ];
             }
         }
 
-        $bundle->setPurchasableIds($purchasableIds);
+        for ($i = 0; $i < sizeof($categoryIds); $i++) {
+            $categoryIds[$i]["index"] = $i;
+        }
+
         $bundle->setCategoryIds($categoryIds);
-    }
-
-    /**
-     * @param PurchasableInterface $purchasable
-     * @return array
-     * @since 1.0.0
-     */
-    public function getBundlesRelatedToPurchasable(PurchasableInterface $purchasable): array
-    {
-        $bundles = [];
-
-        if ($purchasable->getId()) {
-            foreach ($this->getAllBundles() as $bundle) {
-                // Get bundle by related purchasable
-                $purchasableIds = $bundle->getPurchasableIds();
-                $id = $purchasable->getId();
-
-                // Get bundle by related category
-                $relatedTo = ['sourceElement' => $purchasable->getPromotionRelationSource()];
-                $categoryIds = $bundle->getCategoryIds();
-                $relatedCategories = Category::find()->id($categoryIds)->relatedTo($relatedTo)->ids();
-
-                if (in_array($id, $purchasableIds) || !empty($relatedCategories)) {
-                    $bundles[$bundle->id] = $bundle;
-                }
-            }
-        }
-
-        return $bundles;
     }
 
     /**
@@ -292,8 +262,7 @@ class BundleService extends Component
         $record->dateFrom = $model->dateFrom;
         $record->dateTo = $model->dateTo;
         $record->enabled = $model->enabled;
-        $record->bundleDiscount = $model->bundleDiscount;
-        $record->purchaseQty = $model->purchaseQty;
+        $record->bundlePrice = $model->bundlePrice;
         $record->totalUses = $model->totalUses;
         $record->sortOrder = $record->sortOrder ?: 999;
 
@@ -304,21 +273,12 @@ class BundleService extends Component
             $record->save(false);
             $model->id = $record->id;
 
-            BundlePurchasableRecord::deleteAll(['bundleId' => $model->id]);
             BundleCategoryRecord::deleteAll(['bundleId' => $model->id]);
 
-            foreach ($model->getCategoryIds() as $categoryId) {
+            foreach ($model->getCategoryIds() as $categoryItem) {
                 $relation = new BundleCategoryRecord();
-                $relation->categoryId = $categoryId;
-                $relation->bundleId = $model->id;
-                $relation->save(false);
-            }
-
-            foreach ($model->getPurchasableIds() as $purchasableId) {
-                $relation = new BundlePurchasableRecord();
-                $element = Craft::$app->getElements()->getElementById($purchasableId);
-                $relation->purchasableType = get_class($element);
-                $relation->purchasableId = $purchasableId;
+                $relation->categoryId = $categoryItem['id'];
+                $relation->purchaseQty = $categoryItem['purchaseQty'];
                 $relation->bundleId = $model->id;
                 $relation->save(false);
             }
@@ -488,8 +448,7 @@ class BundleService extends Component
                 'bundles.dateFrom',
                 'bundles.dateTo',
                 'bundles.enabled',                
-                'bundles.bundleDiscount',
-                'bundles.purchaseQty',
+                'bundles.bundlePrice',
                 'bundles.totalUses',
                 'bundles.sortOrder',
                 'bundles.dateCreated',
@@ -504,7 +463,7 @@ class BundleService extends Component
      * @return array
      * @since 1.0.0
      */
-    private function _populatBundleRelations($bundles): array
+    private function _populateBundleRelations($bundles): array
     {
         $allBundlesById = [];
 
@@ -512,20 +471,20 @@ class BundleService extends Component
             return $allBundlesById;
         }
 
-        $purchasables = [];
         $categories = [];
 
         foreach ($bundles as $bundle) {
             $id = $bundle['id'];
-            if ($bundle['purchasableId']) {
-                $purchasables[$id][] = $bundle['purchasableId'];
-            }
 
             if ($bundle['categoryId']) {
-                $categories[$id][] = $bundle['categoryId'];
+                $categories[$id][] = [
+                    'id' => $bundle['categoryId'],
+                    'purchaseQty' => $bundle['bptPurchaseQty'],
+                    'category' => Craft::$app->getElements()->getElementById($bundle['categoryId'])
+                ];
             }
 
-            unset($bundle['purchasableId'], $bundle['categoryId']);
+            unset($bundle['categoryId'], $bundle['bptPurchaseQty']);
 
             if (!isset($allBundlesById[$id])) {
                 $allBundlesById[$id] = new Bundle($bundle);
@@ -533,7 +492,11 @@ class BundleService extends Component
         }
 
         foreach ($allBundlesById as $id => $bundle) {
-            $bundle->setPurchasableIds($purchasables[$id] ?? []);
+    
+            for ($i = 0; $i < sizeof($categories[$id]); $i++) {
+                $categories[$id][$i]["index"] = $i;
+            }
+
             $bundle->setCategoryIds($categories[$id] ?? []);
         }
 

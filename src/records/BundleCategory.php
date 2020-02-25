@@ -19,6 +19,7 @@ use yii\db\ActiveQueryInterface;
  * @property ActiveQueryInterface $bundle
  * @property int $bundleId
  * @property int $id
+ * @property int $purchaseQty
  * @author Myth Digital
  * @since 1.0
  */

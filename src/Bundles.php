@@ -50,7 +50,7 @@ class Bundles extends Plugin
     /**
      * @var string
      */
-    public $schemaVersion = '1.0.0';
+    public $schemaVersion = '1.1.0';
 
     // Public Methods
     // =========================================================================
@@ -74,6 +74,7 @@ class Bundles extends Plugin
                 $event->rules['bundles/'] = 'bundles/default/index';
                 $event->rules['bundles/new'] = 'bundles/default/edit';
                 $event->rules['bundles/<id:\d+>'] = 'bundles/default/edit';
+                $event->rules['bundles/partials/category/<index:\d+>'] = 'bundles/default/category-partial';
             }
         );
 

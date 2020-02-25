@@ -1,0 +1,25 @@
+{# @var craft \craft\web\twig\variables\CraftVariable #}
+{% import "_includes/forms" as forms %}
+{% import "bundles/_includes/forms/commerceForms" as commerceForms %}
+
+<tr data-row="true">
+    <td>
+        {{ forms.elementSelectField({
+            id: 'categories' ~ category.index,
+            name: 'categories[' ~ category.index ~ ']',
+            elements: category ? [category.category] : null,
+            elementType: categoryElementType,
+            limit: 1
+        }) }} 
+    </td>
+    <td>
+        {{ commerceForms.numberField({
+            id: 'categoriesPurchaseQty' ~ category.index,
+            name: 'categoriesPurchaseQty[' ~ category.index ~ ']',
+            value: category ? category.purchaseQty : 0,
+            type: 'number',
+            step: 'any',
+            required: true
+        }) }}         
+    </td>
+</tr>
