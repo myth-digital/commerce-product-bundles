@@ -74,17 +74,21 @@ class Bundle extends Component implements AdjusterInterface
         $orderLineItems = $order->getLineItems();
 
         foreach ($bundles as $bundle) {
-            $bundleMatchCount = Bundles::getInstance()->getBundles()->matchOrder($order, $orderLineItems, $bundle);
-            if ($bundleMatchCount > 0) {
-                for ($i = 0; $i < $bundleMatchCount; $i++) {
-                    $availableBundles[] = $bundle;
-                }
-            }
-        }
 
-        foreach ($availableBundles as $bundle) {
-            $newOrderAdjustment = $this->_createOrderAdjustment($bundle);
-            $adjustments[] = $newOrderAdjustment;
+            $bundleMatchResult = Bundles::getInstance()->getBundles()->matchOrder($order, $orderLineItems, $bundle);
+            
+            while ($bundleMatchResult['match']) {
+                $availableBundles[] = $bundle;
+                $orderLineItems = $bundleMatchResult['remainingAvailableLineItems'];
+                $newAdjustment = $this->_createOrderAdjustment($bundle, $bundleMatchResult['lineItemRawPrice']);
+
+                // Don't apply an adjustment that has no beneficial value.
+                if ($newAdjustment->amount < 0) {
+                    $adjustments[] = $newAdjustment;
+                }
+
+                $bundleMatchResult = Bundles::getInstance()->getBundles()->matchOrder($order, $orderLineItems, $bundle);                
+            }
         }
 
         return $adjustments;
@@ -95,10 +99,17 @@ class Bundle extends Component implements AdjusterInterface
 
     /**
      * @param Bundle $discount
+     * @param $rawLineItemPrice
      * @return OrderAdjustment
      */
-    private function _createOrderAdjustment(BundleModel $bundle): OrderAdjustment
+    private function _createOrderAdjustment(BundleModel $bundle, $rawLineItemPrice): OrderAdjustment
     {
+        // Practically, the raw item price should be more than the bundle price. 
+        // We need to adjust the difference between the raw line item price and the bundle price
+        $bundleDiscount = $rawLineItemPrice - $bundle->bundlePrice;
+
+        $bundleDiscount = $bundleDiscount > 0 ? -$bundleDiscount : 0;
+
         //preparing model
         $adjustment = new OrderAdjustment();
         $adjustment->type = self::ADJUSTMENT_TYPE;
@@ -106,7 +117,7 @@ class Bundle extends Component implements AdjusterInterface
         $adjustment->setOrder($this->_order);
         $adjustment->description = $bundle->description;
         $adjustment->sourceSnapshot = $bundle->toArray();
-        $adjustment->amount = -$bundle->bundleDiscount;
+        $adjustment->amount = $bundleDiscount;
 
         return $adjustment;
     }

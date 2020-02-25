@@ -380,54 +380,90 @@ class BundleService extends Component
         if (!empty($bundle->dateFrom) && $bundle->dateFrom > $currentDate) return 0;
         if (!empty($bundle->dateTo) && $bundle->dateTo < $currentDate) return 0;
 
-        // For the bundle to match, we need to find line items that match the category and variant constraints.
-        $matchingLineItems = [];
+        // For the bundle to match, we need to find line items that match the category constraints. 
+        // Each category constraint needs to match with unique line items.
+        
+        $categories = $bundle->getCategoryIds();
+        $availableLineItems = [];
 
-        foreach ($lineItems as $lineItem)
-        {
-            $purchasedItem = $lineItem->getPurchasable();
-            $purchasedProduct = null;
+        foreach ($lineItems as $originalLineItems) {
+            $availableLineItems[] = clone $originalLineItems;
+        }
 
-            if (\is_a($purchasedItem, 'craft\commerce\elements\Variant')) {
-                $purchasedProduct = $purchasedItem->getProduct();
-            }
+        $lineItemsMatch = true;
+        $lineItemRawPrice = 0;
 
-            $purchaseableMatch = empty($bundle->getPurchasableIds()) || \in_array($purchasedItem->getId(), $bundle->getPurchasableIds());
+        foreach ($categories as $category) {
 
-            $categoryMatch = empty($bundle->getCategoryIds());
+            $matchedSoFar = 0;
 
-            if (!$categoryMatch) {
-                foreach ($bundle->getCategoryIds() as $categoryId) {
-                    $categoryByVariant = Category::find()->id($categoryId)->relatedTo($purchasedItem)->count() > 0;
-                    $categoryByProduct = false;
+            // Check each available line item. If it matches the category rule, increment.
+            foreach ($availableLineItems as $li) {
+                $purchasedItem = $li->getPurchasable();
+                $purchasedProduct = null;
+    
+                if (\is_a($purchasedItem, 'craft\commerce\elements\Variant')) {
+                    $purchasedProduct = $purchasedItem->getProduct();
+                }
 
-                    if (!empty($purchasedProduct)) {
-                        $categoryByProduct = Category::find()->id($categoryId)->relatedTo($purchasedProduct)->count() > 0;
+                $categoryByVariant = Category::find()->id($category['id'])->relatedTo($purchasedItem)->count() > 0;
+                $categoryByProduct = false;
+
+                if (!empty($purchasedProduct)) {
+                    $categoryByProduct = Category::find()->id($category['id'])->relatedTo($purchasedProduct)->count() > 0;
+                }
+                
+                if ($categoryByVariant || $categoryByProduct) {
+
+                    // We have a match. Exchange quantity for matches against the rule as far as possible.
+                    while ($li->qty > 0 && $matchedSoFar < $category['purchaseQty']) {
+                        $matchedSoFar = $matchedSoFar + 1;
+                        $li->qty = $li->qty - 1;
+
+                        $lineItemRawPrice = $lineItemRawPrice + $li->salePrice;
                     }
 
-                    $categoryMatch = $categoryByVariant || $categoryByProduct;
+                    // If there is no quantity left, exclude the item in future.
+                    if ($li->qty == 0) {
+                        $availableLineItems = array_filter($availableLineItems, function($aLi) use ($li) {
+                            return $aLi->id != $li->id;
+                        });
+                    }
 
-                    if ($categoryMatch) break;
+                    // If we have fully matched this category rule, stop considering other line items.
+                    if ($matchedSoFar == $category['purchaseQty']) {
+                        break;
+                    }
                 }
             }
 
-            if ($purchaseableMatch && $categoryMatch) $matchingLineItems[] = $lineItem;
+            // We've now either:
+            // - Matched the category rule -> Proceed to the next rule.
+            if ($matchedSoFar == $category['purchaseQty']) {
+                continue;
+            }
+
+            // Or:
+            // - Considered every line item and not matched the category rule. Thus, the overall match fails and we end.
+            $lineItemsMatch = false;
+            break;
         }
 
-        $matchCount = 0;
-        $matchingLineItemRemainingCount = 0;
-        $purchaseQty = $bundle->purchaseQty;
+        // If this flag is set, we have matched the bundle. 
+        // Return to say successful and return the line items to use moving forward.
+        if ($lineItemsMatch) {
+            return [
+                'match' => true,
+                'remainingAvailableLineItems' => $availableLineItems,
+                'lineItemRawPrice' => $lineItemRawPrice
+            ];
 
-        foreach ($matchingLineItems as $lineItem) {
-            $matchingLineItemRemainingCount += $lineItem->qty;
+        } else {
+            return [
+                'match' => false,
+                'remainingAvailableLineItems' => $lineItems,
+            ];
         }
-
-        while ($matchingLineItemRemainingCount >= $purchaseQty) {
-            $matchCount++;
-            $matchingLineItemRemainingCount = $matchingLineItemRemainingCount - $purchaseQty;
-        }
-
-        return $matchCount;
     }
 
     // Private Methods
