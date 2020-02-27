@@ -5,18 +5,18 @@
 <tr data-row="true">
     <td>
         {{ forms.elementSelectField({
-            id: 'categories' ~ category.index,
-            name: 'categories[' ~ category.index ~ ']',
-            elements: category ? category.categories : null,
-            elementType: categoryElementType,
+            id: 'purchasables' ~ purchasable.index,
+            name: 'purchasables[' ~ purchasable.index ~ ']',
+            elements: purchasable ? purchasable.purchasables : null,
+            elementType: purchasableElementType,
             limit: null
         }) }} 
     </td>
     <td>
         {{ commerceForms.numberField({
-            id: 'categoriesPurchaseQty' ~ category.index,
-            name: 'categoriesPurchaseQty[' ~ category.index ~ ']',
-            value: category ? category.purchaseQty : 0,
+            id: 'purchasablesPurchaseQty' ~ purchasable.index,
+            name: 'purchasablesPurchaseQty[' ~ purchasable.index ~ ']',
+            value: purchasable ? purchasable.purchaseQty : 0,
             type: 'number',
             step: 'any',
             required: true

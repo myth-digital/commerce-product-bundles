@@ -75,6 +75,7 @@ class Bundles extends Plugin
                 $event->rules['bundles/new'] = 'bundles/default/edit';
                 $event->rules['bundles/<id:\d+>'] = 'bundles/default/edit';
                 $event->rules['bundles/partials/category/<index:\d+>'] = 'bundles/default/category-partial';
+                $event->rules['bundles/partials/purchasable/<index:\d+>'] = 'bundles/default/purchasable-partial';
             }
         );
 

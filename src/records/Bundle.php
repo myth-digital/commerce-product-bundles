@@ -52,13 +52,13 @@ class Bundle extends ActiveRecord
     public function getBundleCategories(): ActiveQueryInterface
     {
         return $this->hasMany(BundleCategory::class, ['bundleId' => 'id']);
-    }
+    }  
 
     /**
      * @return ActiveQueryInterface
      */
-    public function getCategories(): ActiveQueryInterface
+    public function getBundlePurchasables(): ActiveQueryInterface
     {
-        return $this->hasMany(Category::class, ['id' => 'bundleId'])->via('bundleCategories');
-    }    
+        return $this->hasMany(BundlePurchasable::class, ['bundleId' => 'id']);
+    }      
 }

@@ -86,6 +86,11 @@ class Bundle extends Model
      */
     private $_categoryIds;
 
+    /**
+     * @var array Purchasable IDs
+     */
+    private $_purchasableIds;    
+
     // Public Methods
     // =========================================================================
 
@@ -122,13 +127,35 @@ class Bundle extends Model
     }
 
     /**
-     * Sets the related product type ids
+     * Sets the related category ids
      *
      * @param array $categoryIds
      */
     public function setCategoryIds(array $categoryIds)
     {
         $this->_categoryIds = $categoryIds;
+    }
+
+    /**
+     * @return array
+     */
+    public function getPurchasableIds(): array
+    {
+        if (null === $this->_purchasableIds) {
+            $this->_loadRelations();
+        }
+
+        return $this->_purchasableIds;
+    }
+
+    /**
+     * Sets the related product ids
+     *
+     * @param array $categoryIds
+     */
+    public function setPurchasableIds(array $purchasableIds)
+    {
+        $this->_purchasableIds = $purchasableIds;
     }
 
     /**

@@ -18,6 +18,7 @@ use craft\commerce\Plugin as CommercePlugin;
 use craft\commerce\base\Purchasable;
 use craft\commerce\base\PurchasableInterface;
 use craft\commerce\elements\Product;
+use craft\commerce\elements\Variant;
 use mythdigital\bundles\models\Bundle;
 use mythdigital\bundles\services\BundleService;
 use craft\elements\Category;
@@ -97,13 +98,32 @@ class DefaultController extends Controller
                 'index' => $index,
                 'id' => -1,
                 'purchaseQty' => 0,
-                'category' => null
+                'categories' => null
             ],
             'categoryElementType' => Category::class
         ];
 
         return $this->renderTemplate('bundles/bundles/_categoryPartial', $variables);
-    }    
+    }   
+    
+    /**
+     * @return Response
+     * @throws HttpException
+     */
+    public function actionPurchasablePartial(int $index = 0): Response
+    {
+        $variables = [
+            'purchasable' => [
+                'index' => $index,
+                'id' => -1,
+                'purchaseQty' => 0,
+                'purchasables' => null
+            ],
+            'purchasableElementType' => Product::class
+        ];
+
+        return $this->renderTemplate('bundles/bundles/_purchasablePartial', $variables);
+    }     
 
     /**
      * @throws HttpException
@@ -147,44 +167,103 @@ class DefaultController extends Controller
             $categoryQuantities = [];
         }
 
+        $purchasables = $request->getBodyParam('purchasables', []);
+        if (!$purchasables) {
+            $purchasables = [];
+        }
+
+        $purchasableQuantities = $request->getBodyParam('purchasablesPurchaseQty', []);
+        if (!$purchasableQuantities) {
+            $purchasableQuantities = [];
+        }        
+
         // Combine the fields together.
         $hasCategoryError = false;
+        $hasPurchasableError = false;
 
         $categories = array_filter($categories, function($c) {
-            return !empty($c) && sizeof($c) == 1;
+            return !empty($c);
         });
 
         $categoryQuantities = array_filter($categoryQuantities, function($c) {
-            return !empty($c) && $c > 0;
+            return $c >= 0;
         });
 
         if (sizeof($categories) !== sizeof($categoryQuantities)) {
             $hasCategoryError = true;
             $bundle->addError('categories', 'A category and quantity must be specified for each row');
-        }
+        }        
+
+        $purchasables = array_filter($purchasables, function($p) {
+            return !empty($p);
+        });
+
+        $purchasableQuantities = array_filter($purchasableQuantities, function($p) {
+            return $p >= 0;
+        });        
+
+        if (sizeof($purchasables) !== sizeof($purchasableQuantities)) {
+            $hasPurchasableError = true;
+            $bundle->addError('purchasables', 'A purchasable and quantity must be specified for each row');
+        }        
 
         $mergedCategories = [];
 
         if (!$hasCategoryError) {
             for ($i = 0; $i < sizeof($categories); $i++) {
+
+                if ($categoryQuantities[$i] == 0) continue;
+
+                $loadedCategories = [];
+
+                foreach ($categories[$i] as $categoryId) {
+                    $loadedCategories[] = Craft::$app->getElements()->getElementById($categoryId);
+                }
+
                 $mergedCategories[] = [
                     'index' => $i,
-                    'id' => $categories[$i][0],
+                    'ids' => $categories[$i],
                     'purchaseQty' => $categoryQuantities[$i],
-                    'category' => Craft::$app->getElements()->getElementById($categories[$i][0])
+                    'categories' => $loadedCategories
                 ];     
             }
         }
 
-        if (!$hasCategoryError && empty($mergedCategories)) {
+        $bundle->setCategoryIds($mergedCategories);
+
+        $mergedPurchasables = [];
+
+        if (!$hasPurchasableError) {
+            for ($i = 0; $i < sizeof($purchasables); $i++) {
+
+                if ($purchasableQuantities[$i] == 0) continue;
+
+                $loadedPurchasables = [];
+
+                foreach ($purchasables[$i] as $purchasableId) {
+                    $loadedPurchasables[] = Craft::$app->getElements()->getElementById($purchasableId);
+                }
+
+                $mergedPurchasables[] = [
+                    'index' => $i,
+                    'ids' => $purchasables[$i],
+                    'purchaseQty' => $purchasableQuantities[$i],
+                    'purchasables' => $loadedPurchasables
+                ];     
+            }
+        }   
+        
+        $bundle->setPurchasableIds($mergedPurchasables);
+        
+        if (!$hasPurchasableError && !$hasCategoryError && empty($mergedPurchasables) && empty($mergedCategories)) {
+            $hasPurchasableError = true;
             $hasCategoryError = true;
+            $bundle->addError('purchasables', 'At least one valid row must be added');
             $bundle->addError('categories', 'At least one valid row must be added');
-        } else {
-            $bundle->setCategoryIds($mergedCategories);
         }
 
         // Save it
-        if (!$hasCategoryError && Bundles::getInstance()->getBundles()->saveBundle($bundle)) {
+        if (!$hasCategoryError && !$hasPurchasableError && Bundles::getInstance()->getBundles()->saveBundle($bundle)) {
             Craft::$app->getSession()->setNotice(Craft::t('commerce', 'Bundle saved.'));
             $this->redirectToPostedUrl($bundle);
         } else {
@@ -261,5 +340,6 @@ class DefaultController extends Controller
         }
 
         $variables['categoryElementType'] = Category::class;
+        $variables['purchasableElementType'] = Product::class;
     }
 }

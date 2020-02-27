@@ -8,21 +8,21 @@
 namespace mythdigital\bundles\records;
 
 use craft\db\ActiveRecord;
-use craft\elements\Category;
 use yii\db\ActiveQueryInterface;
+use craft\commerce\records\Purchasable;
 
 /**
- * Bundle Product type record.
+ * Bundle product record.
  *
- * @property string $categories
  * @property ActiveQueryInterface $bundle
  * @property int $bundleId
  * @property int $id
+ * @property string $purchasables
  * @property int $purchaseQty
  * @author Myth Digital
  * @since 1.0
  */
-class BundleCategory extends ActiveRecord
+class BundlePurchasable extends ActiveRecord
 {
     // Public Methods
     // =========================================================================
@@ -32,7 +32,7 @@ class BundleCategory extends ActiveRecord
      */
     public static function tableName()
     {
-        return '{{%bundles_bundle_categories}}';
+        return '{{%bundle_bundle_purchasables}}';
     }
 
     /**

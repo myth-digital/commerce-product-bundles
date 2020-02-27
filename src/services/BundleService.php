@@ -15,6 +15,7 @@ use mythdigital\bundles\records\Bundle as BundleRecord;
 use mythdigital\bundles\models\Bundle;
 use mythdigital\bundles\events\BundleEvent;
 use mythdigital\bundles\records\BundleCategory as BundleCategoryRecord;
+use mythdigital\bundles\records\BundlePurchasable as BundlePurchasableRecord;
 
 use craft\commerce\base\PurchasableInterface;
 use craft\commerce\db\Table;
@@ -130,12 +131,18 @@ class BundleService extends Component
     public function getAllBundles(): array
     {
         if (null === $this->_allBundles) {
+
             $bundles = $this->_createBundleQuery()
                 ->addSelect([
-                    'bpt.categoryId',
-                    'bpt.purchaseQty as bptPurchaseQty'
+                    'bc.categories',
+                    'bc.purchaseQty as bcPurchaseQty',
+                    'bc.uid as bcUid',
+                    'bp.purchasables',
+                    'bp.purchaseQty as bpPurchaseQty',
+                    'bp.uid as bpUid'                    
                 ])
-                ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
+                ->leftJoin('{{%bundles_bundle_categories}}' . ' bc', '[[bc.bundleId]]=[[bundles.id]]')
+                ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
                 ->all();
 
             $this->_allBundles = $this->_populateBundleRelations($bundles);
@@ -159,10 +166,15 @@ class BundleService extends Component
 
             $discounts = $this->_createBundleQuery()
                 ->addSelect([
-                    'bpt.categoryId',
-                    'bpt.purchaseQty as bptPurchaseQty'
+                    'bc.categories',
+                    'bc.purchaseQty as bcPurchaseQty',
+                    'bc.uid as bcUid',
+                    'bp.purchasables',
+                    'bp.purchaseQty as bpPurchaseQty',
+                    'bp.uid as bpUid'
                 ])
-                ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
+                ->leftJoin('{{%bundles_bundle_categories}}' . ' bc', '[[bc.bundleId]]=[[bundles.id]]')
+                ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
                 // Restricted by enabled bundles
                 ->where([
                     'enabled' => 1,
@@ -194,31 +206,73 @@ class BundleService extends Component
     public function populateBundleRelations(Bundle $bundle)
     {
         $rows = (new Query())->select(
-            'bpt.categoryId,
-            bpt.purchaseQty as bptPurchaseQty')
+            'bc.categories,
+            bc.purchaseQty as bcPurchaseQty,
+            bc.uid as bcUid,
+            bp.purchaseQty as bpPurchaseQty,
+            bp.purchasables,
+            bp.uid as bpUid')
             ->from('{{%bundles_bundle}}' . ' bundles')
-            ->leftJoin('{{%bundles_bundle_categories}}' . ' bpt', '[[bpt.bundleId]]=[[bundles.id]]')
+            ->leftJoin('{{%bundles_bundle_categories}}' . ' bc', '[[bc.bundleId]]=[[bundles.id]]')
+            ->leftJoin('{{%bundle_bundle_purchasables}}' . ' bp', '[[bp.bundleId]]=[[bundles.id]]')
             ->where(['bundles.id' => $bundle->id])
             ->all();
 
-        $categoryIds = [];
+        $mappedCategoryIds = [];
+        $mappedPurchasableIds = [];
+
+        $processedCategoryUids = [];
+        $processedPurchasableUids = [];
 
         foreach ($rows as $row) {
 
-            if ($row['categoryId']) {
-                $categoryIds[] = [
-                    'id' => $row['categoryId'],
-                    'purchaseQty' => $row['bptPurchaseQty'],
-                    'category' => Craft::$app->getElements()->getElementById($row['categoryId'])
+            if ($row['categories'] && !in_array($row['bcUid'], $processedCategoryUids)) {
+
+                $categoryIds = json_decode($row['categories']);
+                $categories = [];
+
+                foreach ($categoryIds as $categoryId) {
+                    $categories[] = Craft::$app->getElements()->getElementById($categoryId);
+                }
+
+                $mappedCategoryIds[] = [
+                    'ids' => $categoryIds,
+                    'purchaseQty' => $row['bcPurchaseQty'],
+                    'categories' => $categories
                 ];
+
+                $processedCategoryUids[] = $row['bcUid'];
             }
+
+            if ($row['purchasables'] && !in_array($row['bpUid'], $processedPurchasableUids)) {
+
+                $purchasableIds = json_decode($row['purchasables']);
+                $purchasables = [];
+
+                foreach ($purchasableIds as $purchasableId) {
+                    $purchasables[] = Craft::$app->getElements()->getElementById($purchasableId);
+                }
+
+                $mappedPurchasableIds[] = [
+                    'ids' => $purchasableIds,
+                    'purchaseQty' => $row['bpPurchaseQty'],
+                    'purchasables' => $purchasables
+                ];
+
+                $processedPurchasableUids[] = $row['bpUid'];
+            }         
         }
 
-        for ($i = 0; $i < sizeof($categoryIds); $i++) {
-            $categoryIds[$i]["index"] = $i;
+        for ($i = 0; $i < sizeof($mappedCategoryIds); $i++) {
+            $mappedCategoryIds[$i]["index"] = $i;
         }
 
-        $bundle->setCategoryIds($categoryIds);
+        for ($i = 0; $i < sizeof($mappedPurchasableIds); $i++) {
+            $mappedPurchasableIds[$i]["index"] = $i;
+        }        
+
+        $bundle->setCategoryIds($mappedCategoryIds);
+        $bundle->setPurchasableIds($mappedPurchasableIds);
     }
 
     /**
@@ -274,14 +328,23 @@ class BundleService extends Component
             $model->id = $record->id;
 
             BundleCategoryRecord::deleteAll(['bundleId' => $model->id]);
+            BundlePurchasableRecord::deleteAll(['bundleId' => $model->id]);
 
             foreach ($model->getCategoryIds() as $categoryItem) {
                 $relation = new BundleCategoryRecord();
-                $relation->categoryId = $categoryItem['id'];
+                $relation->categories = json_encode($categoryItem['ids']);
                 $relation->purchaseQty = $categoryItem['purchaseQty'];
                 $relation->bundleId = $model->id;
                 $relation->save(false);
             }
+
+            foreach ($model->getPurchasableIds() as $purchasableItem) {
+                $relation = new BundlePurchasableRecord();
+                $relation->purchasables = json_encode($purchasableItem['ids']);
+                $relation->purchaseQty = $purchasableItem['purchaseQty'];
+                $relation->bundleId = $model->id;
+                $relation->save(false);
+            }            
 
             $transaction->commit();
 
@@ -380,20 +443,24 @@ class BundleService extends Component
         if (!empty($bundle->dateFrom) && $bundle->dateFrom > $currentDate) return 0;
         if (!empty($bundle->dateTo) && $bundle->dateTo < $currentDate) return 0;
 
-        // For the bundle to match, we need to find line items that match the category constraints. 
-        // Each category constraint needs to match with unique line items.
+        // For the bundle to match, we need to find line items that match the product and category constraints. 
+        // Each constraint needs to match with unique line items.
         
+        $products = $bundle->getPurchasableIds();
         $categories = $bundle->getCategoryIds();
+
         $availableLineItems = [];
 
         foreach ($lineItems as $originalLineItems) {
             $availableLineItems[] = clone $originalLineItems;
         }
 
+        // Assume that it's a match initially and try and prove ourselves wrong.
         $lineItemsMatch = true;
         $lineItemRawPrice = 0;
 
-        foreach ($categories as $category) {
+        // Match the product rules.
+        foreach ($products as $product) {
 
             $matchedSoFar = 0;
 
@@ -406,17 +473,12 @@ class BundleService extends Component
                     $purchasedProduct = $purchasedItem->getProduct();
                 }
 
-                $categoryByVariant = Category::find()->id($category['id'])->relatedTo($purchasedItem)->count() > 0;
-                $categoryByProduct = false;
-
-                if (!empty($purchasedProduct)) {
-                    $categoryByProduct = Category::find()->id($category['id'])->relatedTo($purchasedProduct)->count() > 0;
-                }
+                $productMatch = in_array($purchasedProduct->id, $product['ids']);
                 
-                if ($categoryByVariant || $categoryByProduct) {
+                if ($productMatch) {
 
                     // We have a match. Exchange quantity for matches against the rule as far as possible.
-                    while ($li->qty > 0 && $matchedSoFar < $category['purchaseQty']) {
+                    while ($li->qty > 0 && $matchedSoFar < $product['purchaseQty']) {
                         $matchedSoFar = $matchedSoFar + 1;
                         $li->qty = $li->qty - 1;
 
@@ -430,23 +492,85 @@ class BundleService extends Component
                         });
                     }
 
-                    // If we have fully matched this category rule, stop considering other line items.
-                    if ($matchedSoFar == $category['purchaseQty']) {
+                    // If we have fully matched this product rule, stop considering other line items.
+                    if ($matchedSoFar == $product['purchaseQty']) {
                         break;
                     }
                 }
             }
 
             // We've now either:
-            // - Matched the category rule -> Proceed to the next rule.
-            if ($matchedSoFar == $category['purchaseQty']) {
+            // - Matched the product rule -> Proceed to the next rule.
+            if ($matchedSoFar == $product['purchaseQty']) {
                 continue;
             }
 
             // Or:
-            // - Considered every line item and not matched the category rule. Thus, the overall match fails and we end.
+            // - Considered every line item and not matched the product rule. Thus, the overall match fails and we end.
             $lineItemsMatch = false;
             break;
+        }
+
+        // There's no point in running the Category matching if we already failed at product level.
+        if ($lineItemsMatch) {
+
+            // Match the category rules.        
+            foreach ($categories as $category) {
+
+                $matchedSoFar = 0;
+
+                // Check each available line item. If it matches the category rule, increment.
+                foreach ($availableLineItems as $li) {
+                    $purchasedItem = $li->getPurchasable();
+                    $purchasedProduct = null;
+        
+                    if (\is_a($purchasedItem, 'craft\commerce\elements\Variant')) {
+                        $purchasedProduct = $purchasedItem->getProduct();
+                    }
+
+                    $categoryByVariant = Category::find()->id($category['ids'])->relatedTo($purchasedItem)->count() > 0;
+                    $categoryByProduct = false;
+
+                    if (!empty($purchasedProduct)) {
+                        $categoryByProduct = Category::find()->id($category['ids'])->relatedTo($purchasedProduct)->count() > 0;
+                    }
+                    
+                    if ($categoryByVariant || $categoryByProduct) {
+
+                        // We have a match. Exchange quantity for matches against the rule as far as possible.
+                        while ($li->qty > 0 && $matchedSoFar < $category['purchaseQty']) {
+                            $matchedSoFar = $matchedSoFar + 1;
+                            $li->qty = $li->qty - 1;
+
+                            $lineItemRawPrice = $lineItemRawPrice + $li->salePrice;
+                        }
+
+                        // If there is no quantity left, exclude the item in future.
+                        if ($li->qty == 0) {
+                            $availableLineItems = array_filter($availableLineItems, function($aLi) use ($li) {
+                                return $aLi->id != $li->id;
+                            });
+                        }
+
+                        // If we have fully matched this category rule, stop considering other line items.
+                        if ($matchedSoFar == $category['purchaseQty']) {
+                            break;
+                        }
+                    }
+                }
+
+                // We've now either:
+                // - Matched the category rule -> Proceed to the next rule.
+                if ($matchedSoFar == $category['purchaseQty']) {
+                    continue;
+                }
+
+                // Or:
+                // - Considered every line item and not matched the category rule. Thus, the overall match fails and we end.
+                $lineItemsMatch = false;
+                break;
+            }
+
         }
 
         // If this flag is set, we have matched the bundle. 
@@ -508,19 +632,51 @@ class BundleService extends Component
         }
 
         $categories = [];
+        $purchasables = [];
+
+        $processedCategoryUids = [];
+        $processedPurchasableUids = [];
 
         foreach ($bundles as $bundle) {
             $id = $bundle['id'];
 
-            if ($bundle['categoryId']) {
+            if ($bundle['categories'] && !in_array($bundle['bcUid'], $processedCategoryUids)) {
+
+                $categoryIds = json_decode($bundle['categories']);
+                $loadedCategories = [];
+
+                foreach ($categoryIds as $categoryId) {
+                    $loadedCategories[] = Craft::$app->getElements()->getElementById($categoryId);
+                }
+
                 $categories[$id][] = [
-                    'id' => $bundle['categoryId'],
-                    'purchaseQty' => $bundle['bptPurchaseQty'],
-                    'category' => Craft::$app->getElements()->getElementById($bundle['categoryId'])
+                    'ids' => $categoryIds,
+                    'purchaseQty' => $bundle['bcPurchaseQty'],
+                    'categories' => $loadedCategories
                 ];
+
+                $processedCategoryUids[] = $bundle['bcUid'];
             }
 
-            unset($bundle['categoryId'], $bundle['bptPurchaseQty']);
+            if ($bundle['purchasables'] && !in_array($bundle['bpUid'], $processedPurchasableUids)) {
+
+                $purchasableIds = json_decode($bundle['purchasables']);
+                $loadedPurchasables = [];
+
+                foreach ($purchasableIds as $purchasableId) {
+                    $loadedPurchasables[] = Craft::$app->getElements()->getElementById($purchasableId);
+                }
+
+                $purchasables[$id][] = [
+                    'ids' => $purchasableIds,
+                    'purchaseQty' => $bundle['bpPurchaseQty'],
+                    'purchasables' => $loadedPurchasables
+                ];
+
+                $processedPurchasableUids[] = $bundle['bpUid'];
+            }
+
+            unset($bundle['categories'], $bundle['bcPurchaseQty'], $bundle['bcUid'], $bundle['purchasables'], $bundle['bpPurchaseQty'], $bundle['bpUid']);
 
             if (!isset($allBundlesById[$id])) {
                 $allBundlesById[$id] = new Bundle($bundle);
@@ -529,11 +685,20 @@ class BundleService extends Component
 
         foreach ($allBundlesById as $id => $bundle) {
     
-            for ($i = 0; $i < sizeof($categories[$id]); $i++) {
-                $categories[$id][$i]["index"] = $i;
+            if (!empty($categories[$id])) {
+                for ($i = 0; $i < sizeof($categories[$id]); $i++) {
+                    $categories[$id][$i]["index"] = $i;
+                }
+            }
+
+            if (!empty($purchasables[$id])) {
+                for ($i = 0; $i < sizeof($purchasables[$id]); $i++) {
+                    $purchasables[$id][$i]["index"] = $i;
+                }            
             }
 
             $bundle->setCategoryIds($categories[$id] ?? []);
+            $bundle->setPurchasableIds($purchasables[$id] ?? []);
         }
 
         return $allBundlesById;

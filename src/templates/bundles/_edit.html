@@ -93,6 +93,12 @@
             errors: bundle.getErrors('bundlePrice'),
         }) }}
 
+        <div class="field">
+            <div class="heading">
+                <label>Categories</label>
+            </div>
+        </div>
+
         <table class="data fullwidth collapsible" id="categorySelectTable">
             <thead>
                 <tr>
@@ -102,7 +108,7 @@
             </thead>
             <tbody>
                 {% for category in bundle.getCategoryIds() %}
-                    {% include 'bundles/bundles/_categoryPartial.html' with {'categoey': category} %}
+                    {% include 'bundles/bundles/_categoryPartial.html' with {'category': category} %}
                 {% endfor %}
                 <tr>
                     <td colspan="2"><a id="addCategory" href='#'>Add a category</a></td>
@@ -116,7 +122,38 @@
                 {{ err }}
             </p> 
             {% endfor %}
-        {% endif %}        
+        {% endif %}      
+        
+        <div class="field">
+            <div class="heading">
+                <label>Products</label>
+            </div>
+        </div>        
+
+        <table class="data fullwidth collapsible" id="purchasableSelectTable">
+            <thead>
+                <tr>
+                    <td>Product</td>
+                    <td>Quantity</td>
+                </tr>
+            </thead>
+            <tbody>
+                {% for purchasable in bundle.getPurchasableIds() %}
+                    {% include 'bundles/bundles/_purchasablePartial.html' with {'purchasable': purchasable} %}
+                {% endfor %}
+                <tr>
+                    <td colspan="2"><a id="addPurchasable" href='#'>Add a product</a></td>
+                </tr>                
+            </tbody>
+        </table>
+
+        {% if bundle.getErrors('purchasables') is not empty %}
+            {% for err in bundle.getErrors('purchasables') %}
+            <p class="error">
+                {{ err }}
+            </p> 
+            {% endfor %}
+        {% endif %}           
 
     </div>
 
