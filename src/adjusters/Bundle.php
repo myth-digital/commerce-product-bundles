@@ -103,7 +103,7 @@ class Bundle extends Component implements AdjusterInterface
      * @param $rawLineItemPrice
      * @return OrderAdjustment
      */
-    private function _createOrderAdjustment(BundleModel $bundle, $rawLineItemPrice): OrderAdjustment
+    private function _createOrderAdjustment(BundleModel $bundle, $rawLineItemPrice): ?OrderAdjustment
     {
         // Practically, the raw item price should be more than the bundle price. 
         // We need to adjust the difference between the raw line item price and the bundle price
