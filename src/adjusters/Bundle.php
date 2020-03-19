@@ -10,6 +10,7 @@ namespace mythdigital\bundles\adjusters;
 use mythdigital\bundles\Bundles;
 use mythdigital\bundles\records\Bundle as BundleRecord;
 use mythdigital\bundles\models\Bundle as BundleModel;
+use mythdigital\bundles\events\BundleAdjustmentsEvent;
 use craft\base\Component;
 use craft\commerce\base\AdjusterInterface;
 use craft\commerce\elements\Order;
@@ -41,12 +42,12 @@ class Bundle extends Component implements AdjusterInterface
      * use mythdigital\bundles\adjusters\Bundle;
      * use yii\base\Event;
      *
-     * Event::on(Bundle::class, Bundle::EVENT_AFTER_BUNDLE_ADJUSTMENTS_CREATED, function(BundleAdjustmentsEvent $e) {
+     * Event::on(Bundle::class, Bundle::EVENT_AFTER_BUNDLE_ADJUSTMENT_CREATED, function(BundleAdjustmentsEvent $e) {
      *     // Do something - perhaps use a 3rd party to check order data and cancel all adjustments for this bundle or modify the adjustments.
      * });
      * ```
      */
-    const EVENT_AFTER_BUNDLE_ADJUSTMENTS_CREATED = 'afterBundleAdjustmentsCreated';
+    const EVENT_AFTER_BUNDLE_ADJUSTMENT_CREATED = 'afterBundleAdjustmentCreated';
 
 
     // Properties
@@ -83,13 +84,13 @@ class Bundle extends Component implements AdjusterInterface
                 $newAdjustment = $this->_createOrderAdjustment($bundle, $bundleMatchResult['lineItemRawPrice']);
 
                 // Don't apply an adjustment that has no beneficial value.
-                if ($newAdjustment->amount < 0) {
+                if ($newAdjustment && $newAdjustment->amount < 0) {
                     $adjustments[] = $newAdjustment;
                 }
 
                 $bundleMatchResult = Bundles::getInstance()->getBundles()->matchOrder($order, $orderLineItems, $bundle);                
             }
-        }
+        }    
 
         return $adjustments;
     }
@@ -119,6 +120,19 @@ class Bundle extends Component implements AdjusterInterface
         $adjustment->sourceSnapshot = $bundle->toArray();
         $adjustment->amount = $bundleDiscount;
 
-        return $adjustment;
+        // Raise the 'EVENT_AFTER_BUNDLE_ADJUSTMENT_CREATED' event
+        $event = new BundleAdjustmentsEvent([
+            'order' => $this->_order,
+            'bundle' => $bundle,
+            'adjustment' => $adjustment
+        ]);
+
+        $this->trigger(self::EVENT_AFTER_BUNDLE_ADJUSTMENT_CREATED, $event);            
+
+        if (!$event->isValid) {
+            return false;
+        }
+
+        return $event->adjustment;
     }
 }
