@@ -130,7 +130,7 @@ class Bundle extends Component implements AdjusterInterface
         $this->trigger(self::EVENT_AFTER_BUNDLE_ADJUSTMENT_CREATED, $event);            
 
         if (!$event->isValid) {
-            return false;
+            return null;
         }
 
         return $event->adjustment;
