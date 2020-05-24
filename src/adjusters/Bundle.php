@@ -70,7 +70,7 @@ class Bundle extends Component implements AdjusterInterface
 
         $adjustments = [];
         $availableBundles = [];
-        $bundles = Bundles::getInstance()->getBundles()->getAllActiveBundles($order);
+        $bundles = Bundles::getInstance()->getBundles()->getAllActiveBundles();
 
         $orderLineItems = $order->getLineItems();
 

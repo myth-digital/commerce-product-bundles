@@ -154,15 +154,14 @@ class BundleService extends Component
     /**
      * Get all currently active bundles
      *
-     * @param Order|null $order
      * @return array
      * @throws \Exception
      * @since 1.0.0
      */
-    public function getAllActiveBundles($order = null): array
+    public function getAllActiveBundles(): array
     {
         if (null === $this->_allActiveBundles) {
-            $date = $order && $order->dateOrdered ? $order->dateOrdered : new DateTime();
+            $date = new DateTime();
 
             $discounts = $this->_createBundleQuery()
                 ->addSelect([
