@@ -10,7 +10,9 @@ namespace mythdigital\bundles\adjusters;
 use mythdigital\bundles\Bundles;
 use mythdigital\bundles\records\Bundle as BundleRecord;
 use mythdigital\bundles\models\Bundle as BundleModel;
+use mythdigital\bundles\models\BundleOrderMatchResult;
 use mythdigital\bundles\events\BundleAdjustmentsEvent;
+use mythdigital\bundles\services\BundleService;
 use craft\base\Component;
 use craft\commerce\base\AdjusterInterface;
 use craft\commerce\elements\Order;
@@ -78,10 +80,10 @@ class Bundle extends Component implements AdjusterInterface
 
             $bundleMatchResult = Bundles::getInstance()->getBundles()->matchOrder($order, $orderLineItems, $bundle);
             
-            while ($bundleMatchResult['match']) {
+            while ($bundleMatchResult && $bundleMatchResult->matchResult == BundleService::MATCH_RESULT_SUCCESS) {
                 $availableBundles[] = $bundle;
-                $orderLineItems = $bundleMatchResult['remainingAvailableLineItems'];
-                $newAdjustment = $this->_createOrderAdjustment($bundle, $bundleMatchResult['lineItemRawPrice']);
+                $orderLineItems = $bundleMatchResult->remainingAvailableLineItems;
+                $newAdjustment = $this->_createOrderAdjustment($bundle, $bundleMatchResult->lineItemRawPrice);
 
                 // Don't apply an adjustment that has no beneficial value.
                 if ($newAdjustment && $newAdjustment->amount < 0) {

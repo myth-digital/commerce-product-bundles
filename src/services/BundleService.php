@@ -13,6 +13,8 @@ namespace mythdigital\bundles\services;
 use mythdigital\bundles\Bundles;
 use mythdigital\bundles\records\Bundle as BundleRecord;
 use mythdigital\bundles\models\Bundle;
+use mythdigital\bundles\models\BundleOrderMatchResult;
+use mythdigital\bundles\models\BundleRuleMatchResult;
 use mythdigital\bundles\events\BundleEvent;
 use mythdigital\bundles\records\BundleCategory as BundleCategoryRecord;
 use mythdigital\bundles\records\BundlePurchasable as BundlePurchasableRecord;
@@ -20,6 +22,7 @@ use mythdigital\bundles\records\BundlePurchasable as BundlePurchasableRecord;
 use craft\commerce\base\PurchasableInterface;
 use craft\commerce\db\Table;
 use craft\commerce\elements\Order;
+use craft\commerce\elements\Product;
 use craft\commerce\models\LineItem;
 use Craft;
 use craft\base\Component;
@@ -90,6 +93,41 @@ class BundleService extends Component
      */
     const EVENT_AFTER_DELETE_BUNDLE = 'afterDeleteBundle';
 
+    /**
+     * Instructs the matcher to require a full match between an order and a bundle.
+     */
+    const BUNDLE_MATCH_MODE_REQUIRE_ALL = 'matchingModeAll';
+
+    /**
+     * Instructs the matcher to allow a partial match between an order and a bundle.
+     */
+    const BUNDLE_MATCH_MODE_ALLOW_PARTIAL = 'matchingModePartial';
+
+    /**
+     * Specifies that the matching failed.
+     */
+    const MATCH_RESULT_FAILED = 'matchFailed';
+
+    /**
+     * Specifies that the matching partially succeeded.
+     */
+    const MATCH_RESULT_PARTIAL = 'matchPartial';
+
+    /**
+     * Specifies that the matching succeeded.
+     */
+    const MATCH_RESULT_SUCCESS = 'matchSuccessful';
+
+    /**
+     * A product rule.
+     */
+    const BUNDLE_RULE_TYPE_PRODUCT = 'product';
+
+    /**
+     * A category rule.
+     */
+    const BUNDLE_RULE_TYPE_CATEGORY = 'category';
+
     // Properties
     // =========================================================================
 
@@ -154,7 +192,7 @@ class BundleService extends Component
     /**
      * Get all currently active bundles
      *
-     * @return array
+     * @return Bundle[]
      * @throws \Exception
      * @since 1.0.0
      */
@@ -429,18 +467,19 @@ class BundleService extends Component
      * @param Order $order The order.
      * @param LineItem[] $lineItems The line items.
      * @param Bundle $bundle The bundle to match.
-     * @return void
+     * @param String $matchMode The mode to use when matching.
+     * @return BundleOrderMatchResult
      */
-    public function matchOrder(Order $order, $lineItems, Bundle $bundle)
+    public function matchOrder(Order $order, $lineItems, Bundle $bundle, $matchMode = self::BUNDLE_MATCH_MODE_REQUIRE_ALL) : BundleOrderMatchResult
     {
         // Check the bundle is enabled.
-        if (!$bundle->enabled) return 0;
+        if (!$bundle->enabled) return BundleOrderMatchResult::failedResult($bundle);
 
         // Check the dates align.
         $currentDate = new \DateTime();
 
-        if (!empty($bundle->dateFrom) && $bundle->dateFrom > $currentDate) return 0;
-        if (!empty($bundle->dateTo) && $bundle->dateTo < $currentDate) return 0;
+        if (!empty($bundle->dateFrom) && $bundle->dateFrom > $currentDate) return BundleOrderMatchResult::failedResult($bundle);
+        if (!empty($bundle->dateTo) && $bundle->dateTo < $currentDate) return BundleOrderMatchResult::failedResult($bundle);
 
         // For the bundle to match, we need to find line items that match the product and category constraints. 
         // Each constraint needs to match with unique line items.
@@ -450,18 +489,31 @@ class BundleService extends Component
 
         $availableLineItems = [];
 
+        // Regardless of the matching mode, clone the line items so that we can modify them as we see fit.
         foreach ($lineItems as $originalLineItems) {
             $availableLineItems[] = clone $originalLineItems;
         }
 
         // Assume that it's a match initially and try and prove ourselves wrong.
         $lineItemsMatch = true;
+        $anyRuleMatched = false;
         $lineItemRawPrice = 0;
+
+        $totalProductRules = sizeof($products);
+        $totalCategoryRules = sizeof($categories);
+
+        $productRuleMatches = [];
+        $categoryRuleMatches = [];
 
         // Match the product rules.
         foreach ($products as $product) {
 
             $matchedSoFar = 0;
+
+            $ruleMatchResult = new BundleRuleMatchResult();
+            $ruleMatchResult->ruleType = self::BUNDLE_RULE_TYPE_PRODUCT;
+            $ruleMatchResult->rule = $product;
+            $ruleMatchResult->matchesRequired = intval($product['purchaseQty']);
 
             // Check each available line item. If it matches the category rule, increment.
             foreach ($availableLineItems as $li) {
@@ -498,25 +550,42 @@ class BundleService extends Component
                 }
             }
 
+            // Regardless, store the number of matches we made for the rule.
+            $ruleMatchResult->matchesMade = $matchedSoFar;
+
             // We've now either:
             // - Matched the product rule -> Proceed to the next rule.
             if ($matchedSoFar == $product['purchaseQty']) {
+                $ruleMatchResult->matchResult = self::MATCH_RESULT_SUCCESS;
+                $anyRuleMatched = true;
+                $productRuleMatches[] = $ruleMatchResult;
                 continue;
             }
 
             // Or:
-            // - Considered every line item and not matched the product rule. Thus, the overall match fails and we end.
+            // - Considered every line item and not matched the product rule. Thus, the overall match fails and we end matching against this rule.
+            $ruleMatchResult->matchResult = $matchedSoFar > 0 ? self::MATCH_RESULT_PARTIAL : self::MATCH_RESULT_FAILED;
+            $productRuleMatches[] = $ruleMatchResult;
             $lineItemsMatch = false;
-            break;
+
+            // If we require a match against all, we're done now.
+            if ($matchMode == self::BUNDLE_MATCH_MODE_REQUIRE_ALL) {
+                break;
+            }
         }
 
         // There's no point in running the Category matching if we already failed at product level.
-        if ($lineItemsMatch) {
+        // Unless we are allowing a partial match
+        if ($lineItemsMatch || $matchMode == self::BUNDLE_MATCH_MODE_ALLOW_PARTIAL) {
 
             // Match the category rules.        
             foreach ($categories as $category) {
 
                 $matchedSoFar = 0;
+                $ruleMatchResult = new BundleRuleMatchResult();
+                $ruleMatchResult->ruleType = self::BUNDLE_RULE_TYPE_CATEGORY;
+                $ruleMatchResult->rule = $category;
+                $ruleMatchResult->matchesRequired = intval($category['purchaseQty']);
 
                 // Check each available line item. If it matches the category rule, increment.
                 foreach ($availableLineItems as $li) {
@@ -558,35 +627,141 @@ class BundleService extends Component
                     }
                 }
 
+                // Regardless, store the number of matches we made for the rule.
+                $ruleMatchResult->matchesMade = $matchedSoFar;          
+
                 // We've now either:
                 // - Matched the category rule -> Proceed to the next rule.
                 if ($matchedSoFar == $category['purchaseQty']) {
+                    $ruleMatchResult->matchResult = self::MATCH_RESULT_SUCCESS;
+                    $categoryRuleMatches[] = $ruleMatchResult;
+                    $anyRuleMatched = true;
                     continue;
                 }
 
                 // Or:
                 // - Considered every line item and not matched the category rule. Thus, the overall match fails and we end.
+                $ruleMatchResult->matchResult = $matchedSoFar > 0 ? self::MATCH_RESULT_PARTIAL : self::MATCH_RESULT_FAILED;
+                $categoryRuleMatches[] = $ruleMatchResult;
                 $lineItemsMatch = false;
-                break;
-            }
 
+                // If we require a match against all, we're done now.
+                if ($matchMode == self::BUNDLE_MATCH_MODE_REQUIRE_ALL) {
+                    break;
+                }
+            }
         }
+
+        $res = new BundleOrderMatchResult();
+        $res->bundle = $bundle;
+        $res->productRules = $productRuleMatches;
+        $res->categoryRules = $categoryRuleMatches;
 
         // If this flag is set, we have matched the bundle. 
         // Return to say successful and return the line items to use moving forward.
         if ($lineItemsMatch) {
-            return [
-                'match' => true,
-                'remainingAvailableLineItems' => $availableLineItems,
-                'lineItemRawPrice' => $lineItemRawPrice
-            ];
+
+            $res->matchResult = self::MATCH_RESULT_SUCCESS;
+            $res->remainingAvailableLineItems = $availableLineItems;
+            $res->lineItemRawPrice = $lineItemRawPrice;
+            return $res;
 
         } else {
-            return [
-                'match' => false,
-                'remainingAvailableLineItems' => $lineItems,
-            ];
+
+            if ($matchMode == self::BUNDLE_MATCH_MODE_ALLOW_PARTIAL && $anyRuleMatched) {
+
+                $res->matchResult = self::MATCH_RESULT_PARTIAL;
+                $res->remainingAvailableLineItems = $availableLineItems;
+                return $res;
+            } 
+
+            $res->remainingAvailableLineItems = $lineItems;
+            $res->matchResult = self::MATCH_RESULT_FAILED;
+            return $res;
         }
+    }
+
+    /**
+     * Finds active bundles that this order is someway towards matching.
+     *
+     * @param Order $order
+     * @return BundleOrderMatchResult[]
+     */
+    public function findPartialMatchingBundlesForOrder(Order $order) 
+    {
+        $bundles = $this->getAllActiveBundles();
+        $matchingBundles = [];
+
+        foreach ($bundles as $bundle) {
+
+            $result = $this->matchOrder($order, $order->getLineItems(), $bundle, BUNDLE_MATCH_MODE_ALLOW_PARTIAL);
+
+            if ($result !== MATCH_RESULT_FAILED) {
+                $matchingBundles[] = $result;
+            }
+        }
+
+        return $matchingBundles;
+    }
+
+    /**
+     * Finds the bundles that apply to the specified product.
+     *
+     * @param Product $product The product.
+     * @return Bundle[]
+     */
+    public function findBundlesForProduct(Product $product) 
+    {
+        $bundles = $this->getAllActiveBundles();
+        $validBundles = [];
+
+        foreach ($bundles as $bundle) {
+
+            $match = false;
+            $bundleProductRules = $bundle->getPurchasableIds();
+            $bundleCategoryRules = $bundle->getCategoryIds();
+
+            // We only need to match the product against a single rule. We don't care which rule matches.
+            foreach ($bundleProductRules as $productRule) {
+
+                $productIds = $productRule['ids'];
+
+                if (in_array($product->id, $productIds)) {
+                    $match = true;
+                    break;
+                }
+            }
+
+            if (!$match) {
+
+                foreach ($bundleCategoryRules as $categoryRule) {
+
+                    $categoryIds = $categoryRule['ids'];
+
+                    // Check for any categories with these IDs that relate to the product.
+                    $categoryByProduct = Category::find()->id($categoryIds)->relatedTo($product)->count() > 0;
+
+                    if ($categoryByProduct > 0) {
+                        $match = true;
+                        break;
+                    }
+
+                    $variants = $product->getVariants();
+                    $categoryByVariant = Category::find()->id($categoryIds)->relatedTo($variants)->count() > 0;
+
+                    if ($categoryByProduct > 0) {
+                        $match = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($match) {
+                $validBundles[] = $bundle;
+            }
+        }
+
+        return $validBundles;
     }
 
     // Private Methods
