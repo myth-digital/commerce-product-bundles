@@ -143,18 +143,17 @@ class DefaultController extends Controller
         $bundle->totalUses = $bundle->totalUses ? $bundle->totalUses : 0;
 
         $date = $request->getBodyParam('dateFrom');
-        $dateDate = $request->getBodyParam('dateFrom[date]');
+        $dateDate = $date['date'];
         if ($date && $dateDate) {
             $dateTime = DateTimeHelper::toDateTime($date) ?: null;
-            $discount->dateFrom = $dateTime;
+            $bundle->dateFrom = $dateTime;
         }
 
         $date = $request->getBodyParam('dateTo');
-        $dateDate = $request->getBodyParam('dateFrom[date]');
-
+        $dateDate = $date['date'];
         if ($date && $dateDate) {
             $dateTime = DateTimeHelper::toDateTime($date) ?: null;
-            $discount->dateTo = $dateTime;
+            $bundle->dateTo = $dateTime;
         }
 
         $categories = $request->getBodyParam('categories', []);
