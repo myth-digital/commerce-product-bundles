@@ -1,12 +1,6 @@
-# Bundles plugin for Craft CMS 3.x
+# Bundles plugin for Craft Commerce
 
 Craft Commerce Bundles Plugin
-
-![Screenshot](resources/img/plugin-logo.png)
-
-## Requirements
-
-This plugin requires Craft CMS 3.0.0-beta.23 or later.
 
 ## Installation
 
@@ -18,26 +12,14 @@ To install the plugin, follow these instructions.
 
 2. Then tell Composer to load the plugin:
 
-        composer require commerce-product-bundles/bundles
+        composer require mythdigital/bundles
 
 3. In the Control Panel, go to Settings → Plugins and click the “Install” button for Bundles.
 
 ## Bundles Overview
 
--Insert text here-
+This plugin extends Craft Commerce to support the ability to offer "product bundle" discounts. The plugin allows bundles to be defined by the user. The plugin will then match the products in the cart against the configured bundles and apply the appropriate discount based on the rules.
 
-## Configuring Bundles
-
--Insert text here-
-
-## Using Bundles
-
--Insert text here-
-
-## Bundles Roadmap
-
-Some things to do, and ideas for potential features:
-
-* Release it
+Functionality is also available to determine the bundles a user is currently working towards, therefore allowing in-projectt UX to guide them to the best offers.
 
 Brought to you by [Myth Digital](https://myth.digital/)
