@@ -140,6 +140,7 @@ class DefaultController extends Controller
         $bundle->description = $request->getBodyParam('description');
         $bundle->enabled = (bool)$request->getBodyParam('enabled');
         $bundle->bundlePrice = $request->getBodyParam('bundlePrice');
+        $bundle->pricePercentage = $request->getBodyParam('pricePercentage');
         $bundle->totalUses = $bundle->totalUses ? $bundle->totalUses : 0;
 
         $date = $request->getBodyParam('dateFrom');

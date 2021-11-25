@@ -354,6 +354,7 @@ class BundleService extends Component
         $record->dateTo = $model->dateTo;
         $record->enabled = $model->enabled;
         $record->bundlePrice = $model->bundlePrice;
+        $record->pricePercentage = $model->pricePercentage;
         $record->totalUses = $model->totalUses;
         $record->sortOrder = $record->sortOrder ?: 999;
 
@@ -783,6 +784,7 @@ class BundleService extends Component
                 'bundles.dateTo',
                 'bundles.enabled',                
                 'bundles.bundlePrice',
+                'bundles.pricePercentage',
                 'bundles.totalUses',
                 'bundles.sortOrder',
                 'bundles.dateCreated',

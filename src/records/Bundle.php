@@ -27,6 +27,7 @@ use craft\commerce\records\Purchasable;
  * @property DateTime $dateTo
  * @property bool $enabled
  * @property float $bundlePrice
+ * @property int $pricePercentage
  * @property int $sortOrder
  * @property int $totalUses
  * @author Myth Digital

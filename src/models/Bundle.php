@@ -62,6 +62,13 @@ class Bundle extends Model
     public $bundlePrice = 0;    
 
     /**
+     * percentage discount to be applied to the bundle (Black Friday Hot Fix)
+     *
+     * @var integer
+     */
+    public $pricePercentage = 0;
+
+    /**
      * @var int Total use counter;
      */
     public $totalUses = 0;
@@ -165,10 +172,11 @@ class Bundle extends Model
     {
         $rules = parent::rules();
 
-        $rules[] = [['name', 'bundlePrice'], 'required'];
+        $rules[] = [['name', 'bundlePrice', 'pricePercentage'], 'required'];
         $rules[] = [
             [
                 'bundlePrice',
+                'pricePercentage',
                 'totalUses'
             ], 'number', 'skipOnEmpty' => false
         ];
