@@ -109,7 +109,12 @@ class Bundle extends Component implements AdjusterInterface
     {
         // Practically, the raw item price should be more than the bundle price. 
         // We need to adjust the difference between the raw line item price and the bundle price
+        //need to check if there is a percentage
         $bundleDiscount = $rawLineItemPrice - $bundle->bundlePrice;
+        if (!empty($bundle->pricePercentage || $bundle->$pricePercentage !== 0)) {
+            $bundleDiscountValue = ($bundleDiscount * $bundle->pricePercentage) / 100;
+            $bundleDiscount = $bundleDiscount - $bundleDiscountValue;
+        }
 
         $bundleDiscount = $bundleDiscount > 0 ? -$bundleDiscount : 0;
 

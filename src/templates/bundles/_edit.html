@@ -93,6 +93,18 @@
             errors: bundle.getErrors('bundlePrice'),
         }) }}
 
+        {{ commerceForms.numberField({
+            label: "Bundle Percentage"|t('bundles'),
+            instructions: "The bundle percentage for Black Friday"|t('bundles'),
+            id: 'pricePercentage',
+            name: 'pricePercentage',
+            value: bundle.pricePercentage != 0 ? bundle.pricePercentage : 0,
+            type: 'number',
+            step: 'any',
+            required: false,
+            errors: bundle.getErrors('pricePercentage'),
+        }) }}
+
         <div class="field">
             <div class="heading">
                 <label>Categories</label>
